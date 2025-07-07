@@ -1,16 +1,41 @@
-<<<<<<< HEAD
-# React + Vite
+# 🕶️ AI Eyeglasses Try-On Web App
 
-This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
+An AI-powered virtual try-on experience built with **React.js**, **TailwindCSS**, and **face-api.js**.  
+Users can use their webcam to see how different eyeglass frames look on their face in real-time.
 
-Currently, two official plugins are available:
+---
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Babel](https://babeljs.io/) for Fast Refresh
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/) for Fast Refresh
+## ✨ Features
 
-## Expanding the ESLint configuration
+- 🎥 Live webcam face detection
+- 👓 Virtual try-on using facial landmarks
+- 🔄 Switch between different eyeglass frames
+- 💻 Built with React, TailwindCSS, and face-api.js
+- 📦 Responsive and fully client-side (no backend needed)
 
-If you are developing a production application, we recommend using TypeScript with type-aware lint rules enabled. Check out the [TS template](https://github.com/vitejs/vite/tree/main/packages/create-vite/template-react-ts) for information on how to integrate TypeScript and [`typescript-eslint`](https://typescript-eslint.io) in your project.
-=======
-# EyeGlasses-TryOn
->>>>>>> 0f1d308477bfb3e8e8d0b858a58b401849211da6
+---
+
+## 🔧 Tech Stack
+
+| Tech        | Description                        |
+|-------------|------------------------------------|
+| React       | Frontend framework (Vite setup)    |
+| TailwindCSS | Utility-first CSS for UI styling   |
+| face-api.js | Face detection and landmarks       |
+| Vite        | Fast dev server & build tool       |
+
+---
+
+## 📸 Preview
+
+![screenshot](./public/glasses1.png)
+
+---
+
+## 🚀 Getting Started
+
+### 1. Clone the Repository
+
+```bash
+git clone https://github.com/DuaeZahra/eyeglasses-tryon.git
+cd eyeglasses-tryon
