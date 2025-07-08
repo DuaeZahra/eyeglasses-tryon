@@ -26,13 +26,8 @@ Users can use their webcam to see how different eyeglass frames look on their fa
 
 ---
 
-## 📸 Preview
 
-![screenshot](./public/glasses1.png)
-
----
-
-## 🚀 Getting Started
+##  Getting Started
 
 ### 1. Clone the Repository
 
