@@ -6,7 +6,8 @@ export default function Products() {
       {products.map((p) => (
         <div key={p.id} className="border rounded shadow p-4 text-center">
           <img src={p.image} alt={p.name} className="h-32 mx-auto" />
-          <h3 className="mt-2 font-semibold">{p.name}</h3>
+          <h3 className="mt-2 font-semibold text-lg">{p.name}</h3>
+          <p className="text-gray-600 text-sm mt-1">PKR {p.price.toLocaleString()}</p>
         </div>
       ))}
     </div>
