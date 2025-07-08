@@ -50,7 +50,7 @@ const products = [
   {
     id: 9,
     name: "Burundy",
-    image: "/glasses8.png",
+    image: "/glasses9.png",
     price: 4600,
   },
 ]

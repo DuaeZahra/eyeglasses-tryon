@@ -2,11 +2,12 @@ export default function Home() {
   return (
     <div className="flex flex-col items-center justify-center text-center min-h-[80vh] px-6">
       <h1 className="text-4xl md:text-5xl font-extrabold text-gray-800">
-        Welcome to <span className="text-blue-600">Shades TryRoom</span>
+        Welcome to <span className="text-blue-600">EyeGlasses Store</span>
       </h1>
       <p className="mt-4 text-lg md:text-xl text-gray-600 max-w-xl">
-         Try on stylish eyeglass frames in real-time using your webcam or an uploaded image — powered by AI face detection and virtual overlays.  
-  We offer you a seamless virtual try-on experience, helping you find the perfect frame that suits your style — effortlessly and confidently.
+         Explore our collection of stylish eyeglass frames and experience the future of eyewear shopping.  
+  With our AI-powered virtual tryroom, you can preview any frame in real-time using your webcam or an uploaded image — all before making a purchase.  
+  Find the perfect fit with confidence in a seamless, personalized shopping experience.
       </p>
 
       <div className="mt-6 space-x-4">

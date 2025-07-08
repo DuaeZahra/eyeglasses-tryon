@@ -1,3 +1,9 @@
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
+
+/* Light blue gradient background */
+body {
+  @apply bg-gradient-to-b from-blue-100 via-blue-50 to-white;
+  min-height: 100vh;
+}
