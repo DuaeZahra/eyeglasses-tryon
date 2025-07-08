@@ -1,111 +1,192 @@
-import React, { useRef, useEffect, useState } from 'react'
+import React, { useRef, useState, useEffect } from 'react'
 import * as faceapi from 'face-api.js'
+import { useSelectedGlasses } from '../context/SelectedGlassesContext'
 
 export default function TryOn() {
   const videoRef = useRef()
+  const imageRef = useRef()
   const canvasRef = useRef()
-  const [glasses, setGlasses] = useState('/glasses1.png')
+  const { selectedImage, setSelectedImage } = useSelectedGlasses()
   const [glassesImg, setGlassesImg] = useState(null)
+  const [imageURL, setImageURL] = useState(null)
+  const [useWebcam, setUseWebcam] = useState(true)
 
   // Load models once
   useEffect(() => {
     const loadModels = async () => {
       const MODEL_URL = '/models'
-      await faceapi.nets.tinyFaceDetector.loadFromUri(MODEL_URL)
-      await faceapi.nets.faceLandmark68Net.loadFromUri(MODEL_URL)
-      console.log('Models loaded')
+      await Promise.all([
+        faceapi.nets.tinyFaceDetector.loadFromUri(MODEL_URL),
+        faceapi.nets.faceLandmark68Net.loadFromUri(MODEL_URL),
+      ])
+      console.log('✅ FaceAPI models loaded')
     }
     loadModels()
   }, [])
 
-  // Start webcam
-  useEffect(() => {
-    navigator.mediaDevices.getUserMedia({ video: {} }).then((stream) => {
-      if (videoRef.current) {
-        videoRef.current.srcObject = stream
-      }
-    })
-  }, [])
-
-  // Load glasses image when selection changes
+  // Load selected glasses image
   useEffect(() => {
     const img = new Image()
-    img.src = glasses
-    img.onload = () => {
-      setGlassesImg(img)
+    img.src = selectedImage
+    img.onload = () => setGlassesImg(img)
+  }, [selectedImage])
+
+  // Start webcam stream
+  useEffect(() => {
+    if (useWebcam) {
+      navigator.mediaDevices.getUserMedia({ video: true }).then((stream) => {
+        videoRef.current.srcObject = stream
+      })
     }
-  }, [glasses])
+  }, [useWebcam])
 
-  // Run detection and draw overlay
-  const handlePlay = () => {
-    const video = videoRef.current
+  // Draw face + glasses
+  const detectFaceAndDraw = async (input) => {
     const canvas = canvasRef.current
-    const displaySize = { width: video.width, height: video.height }
-
+    const displaySize = { width: input.width, height: input.height }
     faceapi.matchDimensions(canvas, displaySize)
 
-    setInterval(async () => {
-      const detections = await faceapi
-        .detectSingleFace(video, new faceapi.TinyFaceDetectorOptions())
-        .withFaceLandmarks()
+    const detections = await faceapi
+      .detectSingleFace(input, new faceapi.TinyFaceDetectorOptions())
+      .withFaceLandmarks()
 
-      const ctx = canvas.getContext('2d')
-      ctx.clearRect(0, 0, canvas.width, canvas.height)
+    const ctx = canvas.getContext('2d')
+    ctx.clearRect(0, 0, canvas.width, canvas.height)
+    ctx.drawImage(input, 0, 0, canvas.width, canvas.height)
 
-      if (detections && glassesImg) {
-        const resized = faceapi.resizeResults(detections, displaySize)
-        const landmarks = resized.landmarks
+    if (detections && glassesImg) {
+      const landmarks = detections.landmarks
+      const leftEye = landmarks.getLeftEye()
+      const rightEye = landmarks.getRightEye()
 
-        const leftEye = landmarks.getLeftEye()
-        const rightEye = landmarks.getRightEye()
+      const eyeCenterX = (leftEye[0].x + rightEye[3].x) / 2
+      const eyeCenterY = (leftEye[0].y + rightEye[3].y) / 2
+      const eyeDist = Math.abs(rightEye[3].x - leftEye[0].x)
+      const glassesWidth = eyeDist * 2
+      const glassesHeight = glassesWidth / 3
 
-        const eyeMidX = (leftEye[0].x + rightEye[3].x) / 2
-        const eyeMidY = (leftEye[0].y + rightEye[3].y) / 2
-        const eyeWidth = Math.abs(rightEye[3].x - leftEye[0].x) * 1.6
+      ctx.drawImage(
+        glassesImg,
+        eyeCenterX - glassesWidth / 2,
+        eyeCenterY - glassesHeight / 2,
+        glassesWidth,
+        glassesHeight
+      )
+    }
+  }
 
-        ctx.drawImage(
-          glassesImg,
-          eyeMidX - eyeWidth / 2,
-          eyeMidY - eyeWidth / 3,
-          eyeWidth,
-          eyeWidth / 2
-        )
+  // Webcam draw loop using requestAnimationFrame
+  useEffect(() => {
+    let animationFrameId
+
+    const drawLoop = async () => {
+      const video = videoRef.current
+      if (useWebcam && glassesImg && video && video.readyState === 4) {
+        await detectFaceAndDraw(video)
       }
-    }, 300)
+      animationFrameId = requestAnimationFrame(drawLoop)
+    }
+
+    if (useWebcam) {
+      drawLoop()
+    }
+
+    return () => cancelAnimationFrame(animationFrameId)
+  }, [glassesImg, useWebcam])
+
+  // Re-draw on image glasses change
+  useEffect(() => {
+    if (!useWebcam && imageRef.current?.complete) {
+      detectFaceAndDraw(imageRef.current)
+    }
+  }, [selectedImage])
+
+  // On image upload
+  const handleFileChange = (e) => {
+    const file = e.target.files[0]
+    if (file) {
+      const reader = new FileReader()
+      reader.onload = () => {
+        setUseWebcam(false)
+        setImageURL(reader.result)
+      }
+      reader.readAsDataURL(file)
+    }
+  }
+
+  const handleImageLoad = () => {
+    detectFaceAndDraw(imageRef.current)
   }
 
   return (
-    <div className="p-6">
-      <h2 className="text-xl font-semibold mb-4">Try on Glasses (Live Camera)</h2>
+    <div className="min-h-screen bg-gradient-to-br from-gray-100 to-white py-10 px-4 flex flex-col items-center">
+      <h2 className="text-4xl font-bold text-gray-800 mb-6">🕶️ AI Glasses Try-On</h2>
 
-      <div className="relative inline-block">
-        <video
-          ref={videoRef}
-          autoPlay
-          muted
-          width="640"
-          height="480"
-          onPlay={handlePlay}
-          className="rounded border"
-        />
-        <canvas
-          ref={canvasRef}
-          width="640"
-          height="480"
-          className="absolute top-0 left-0 pointer-events-none"
-        />
-      </div>
+      <div className="bg-white shadow-xl rounded-xl p-6 w-full max-w-3xl">
+        {/* Controls */}
+        <div className="flex flex-col sm:flex-row items-center justify-between gap-4 mb-6">
+          <div className="flex gap-3">
+            <button
+              onClick={() => setUseWebcam(true)}
+              className={`px-4 py-2 rounded-xl text-sm font-medium transition duration-200 ${
+                useWebcam
+                  ? 'bg-black text-white'
+                  : 'bg-gray-200 hover:bg-gray-300 text-black'
+              }`}
+            >
+              Use Webcam
+            </button>
+            <label className="cursor-pointer px-4 py-2 bg-gray-200 hover:bg-gray-300 rounded-xl text-sm font-medium">
+              Upload Image
+              <input type="file" accept="image/*" onChange={handleFileChange} hidden />
+            </label>
+          </div>
 
-      <div className="mt-4">
-        <label className="mr-2">Choose Glasses:</label>
-        <select
-          onChange={(e) => setGlasses(e.target.value)}
-          className="border p-1 rounded"
-          value={glasses}
-        >
-          <option value="/glasses1.png">Classic Black</option>
-          <option value="/glasses2.png">Retro Round</option>
-        </select>
+          {/* Dropdown */}
+          <select
+            value={selectedImage}
+            onChange={(e) => setSelectedImage(e.target.value)}
+            className="border border-gray-300 rounded-xl px-4 py-2 text-sm bg-white"
+          >
+            <option value="/glasses1.png">Concept</option>
+            <option value="/glasses2.png">Rotem</option>
+            <option value="/glasses3.png">PrimRose</option>
+            <option value="/glasses4.png">Terminal</option>
+            <option value="/glasses5.png">Identity</option>
+            <option value="/glasses6.png">Roaring</option>
+          </select>
+        </div>
+
+        {/* Canvas Preview */}
+        <div className="relative w-full aspect-video rounded-lg overflow-hidden shadow-md border border-gray-300 bg-gray-100">
+          {useWebcam ? (
+            <video
+              ref={videoRef}
+              autoPlay
+              playsInline
+              muted
+              width="640"
+              height="480"
+              className="absolute top-0 left-0 w-full h-full object-cover"
+            />
+          ) : (
+            imageURL && (
+              <img
+                ref={imageRef}
+                src={imageURL}
+                alt="Uploaded"
+                onLoad={handleImageLoad}
+                className="hidden"
+              />
+            )
+          )}
+          <canvas
+            ref={canvasRef}
+            width="640"
+            height="480"
+            className="absolute top-0 left-0 w-full h-full z-10"
+          />
+        </div>
       </div>
     </div>
   )

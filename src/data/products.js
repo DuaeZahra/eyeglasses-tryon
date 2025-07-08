@@ -35,24 +35,6 @@ const products = [
     image: "/glasses6.png",
     price: 4700,
   },
-  {
-    id: 7,
-    name: "Ledger",
-    image: "/glasses7.png",
-    price: 5000,
-  },
-  {
-    id: 8,
-    name: "Mila",
-    image: "/glasses8.png",
-    price: 4400,
-  },
-  {
-    id: 9,
-    name: "Burundy",
-    image: "/glasses9.png",
-    price: 4600,
-  },
-]
+  ]
 
 export default products
