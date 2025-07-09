@@ -89,14 +89,13 @@ export default function TryOn() {
     return () => clearInterval(interval)
   }, [glassesImg, useWebcam])
 
-  // Re-draw glasses on image when selection changes
+  // Redraw when image loaded manually
   useEffect(() => {
     if (!useWebcam && imageRef.current?.complete) {
       detectFaceAndDraw(imageRef.current)
     }
   }, [selectedImage])
 
-  // When a new image is uploaded
   const handleFileChange = (e) => {
     const file = e.target.files[0]
     if (file) {
@@ -114,7 +113,7 @@ export default function TryOn() {
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-gray-100 to-white py-10 px-4 flex flex-col items-center">
+    <div className="min-h-screen py-10 px-4 flex flex-col items-center">
       <h2 className="text-4xl font-bold text-gray-800 mb-6">🕶️ AI Glasses Try-Room</h2>
 
       <div className="bg-white shadow-xl rounded-xl p-6 w-full max-w-3xl">
