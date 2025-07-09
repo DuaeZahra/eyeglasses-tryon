@@ -11,7 +11,7 @@ export default function TryOn() {
   const [imageURL, setImageURL] = useState(null)
   const [useWebcam, setUseWebcam] = useState(true)
 
-  // Load models once
+  // Load face-api models
   useEffect(() => {
     const loadModels = async () => {
       const MODEL_URL = '/models'
@@ -19,19 +19,18 @@ export default function TryOn() {
         faceapi.nets.tinyFaceDetector.loadFromUri(MODEL_URL),
         faceapi.nets.faceLandmark68Net.loadFromUri(MODEL_URL),
       ])
-      console.log('✅ FaceAPI models loaded')
     }
     loadModels()
   }, [])
 
-  // Load selected glasses image
+  // Load glasses image
   useEffect(() => {
     const img = new Image()
     img.src = selectedImage
     img.onload = () => setGlassesImg(img)
   }, [selectedImage])
 
-  // Start webcam stream
+  // Start webcam
   useEffect(() => {
     if (useWebcam) {
       navigator.mediaDevices.getUserMedia({ video: true }).then((stream) => {
@@ -40,10 +39,11 @@ export default function TryOn() {
     }
   }, [useWebcam])
 
-  // Draw face + glasses
+  // Draw glasses on detected face
   const detectFaceAndDraw = async (input) => {
     const canvas = canvasRef.current
     const displaySize = { width: input.width, height: input.height }
+
     faceapi.matchDimensions(canvas, displaySize)
 
     const detections = await faceapi
@@ -75,33 +75,28 @@ export default function TryOn() {
     }
   }
 
-  // Webcam draw loop using requestAnimationFrame
+  // Live webcam draw loop
   useEffect(() => {
-    let animationFrameId
+    if (!useWebcam || !glassesImg) return
 
-    const drawLoop = async () => {
+    const interval = setInterval(() => {
       const video = videoRef.current
-      if (useWebcam && glassesImg && video && video.readyState === 4) {
-        await detectFaceAndDraw(video)
+      if (video && video.readyState === 4) {
+        detectFaceAndDraw(video)
       }
-      animationFrameId = requestAnimationFrame(drawLoop)
-    }
+    }, 300)
 
-    if (useWebcam) {
-      drawLoop()
-    }
-
-    return () => cancelAnimationFrame(animationFrameId)
+    return () => clearInterval(interval)
   }, [glassesImg, useWebcam])
 
-  // Re-draw on image glasses change
+  // Re-draw glasses on image when selection changes
   useEffect(() => {
     if (!useWebcam && imageRef.current?.complete) {
       detectFaceAndDraw(imageRef.current)
     }
   }, [selectedImage])
 
-  // On image upload
+  // When a new image is uploaded
   const handleFileChange = (e) => {
     const file = e.target.files[0]
     if (file) {
@@ -120,7 +115,7 @@ export default function TryOn() {
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-gray-100 to-white py-10 px-4 flex flex-col items-center">
-      <h2 className="text-4xl font-bold text-gray-800 mb-6">🕶️ AI Glasses Try-On</h2>
+      <h2 className="text-4xl font-bold text-gray-800 mb-6">🕶️ AI Glasses Try-Room</h2>
 
       <div className="bg-white shadow-xl rounded-xl p-6 w-full max-w-3xl">
         {/* Controls */}
@@ -157,7 +152,7 @@ export default function TryOn() {
           </select>
         </div>
 
-        {/* Canvas Preview */}
+        {/* Preview Area */}
         <div className="relative w-full aspect-video rounded-lg overflow-hidden shadow-md border border-gray-300 bg-gray-100">
           {useWebcam ? (
             <video
