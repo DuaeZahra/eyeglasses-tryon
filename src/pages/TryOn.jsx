@@ -25,7 +25,7 @@ export default function TryOn() {
     loadModels();
   }, []);
 
-  // Context image support
+  // Syncs image selection to glasses selection
   useEffect(() => {
     if (selectedImage) {
       setSelectedGlasses(selectedImage);
@@ -70,6 +70,7 @@ export default function TryOn() {
     return () => clearInterval(interval);
   }, [useWebcam, glassesImg]);
 
+  
   const startWebcam = async () => {
     try {
       setLoadingWebcam(true);
@@ -104,6 +105,30 @@ export default function TryOn() {
       };
       reader.readAsDataURL(file);
     }
+  };
+
+  const handleSnapshot = () => {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+
+    const snapshotCanvas = document.createElement('canvas');
+    snapshotCanvas.width = canvas.width;
+    snapshotCanvas.height = canvas.height;
+
+    const ctx = snapshotCanvas.getContext('2d');
+
+    if (useWebcam && mirror) {
+    // Flip horizontally
+    ctx.translate(snapshotCanvas.width, 0);
+    ctx.scale(-1, 1);
+    }
+
+    ctx.drawImage(canvas, 0, 0);
+
+    const link = document.createElement('a');
+    link.download = 'tryon-snapshot.png';
+    link.href = snapshotCanvas.toDataURL('image/png');
+    link.click();
   };
 
   const detectFaceAndDraw = async () => {
@@ -156,30 +181,6 @@ export default function TryOn() {
         ctx.restore();
       }
     });
-  };
-
-  const handleSnapshot = () => {
-    const canvas = canvasRef.current;
-    if (!canvas) return;
-
-    const snapshotCanvas = document.createElement('canvas');
-    snapshotCanvas.width = canvas.width;
-    snapshotCanvas.height = canvas.height;
-
-    const ctx = snapshotCanvas.getContext('2d');
-
-    if (useWebcam && mirror) {
-    // Flip horizontally
-    ctx.translate(snapshotCanvas.width, 0);
-    ctx.scale(-1, 1);
-    }
-
-    ctx.drawImage(canvas, 0, 0);
-
-    const link = document.createElement('a');
-    link.download = 'tryon-snapshot.png';
-    link.href = snapshotCanvas.toDataURL('image/png');
-    link.click();
   };
 
 
