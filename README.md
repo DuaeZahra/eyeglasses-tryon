@@ -51,28 +51,28 @@ npm run dev
 ```
 ## 📸 Screenshots
 
+## 📸 Screenshots
+
 <table>
   <tr>
     <td align="center">
       <strong>Home Page</strong><br/>
-      <img src="public/screenshots/home.png" width="250"/>
+      <img src="public/screenshots/home.png" width="300"/>
     </td>
     <td align="center">
       <strong>Product Listing</strong><br/>
-      <img src="public/screenshots/products.png" width="250"/>
-    </td>
-    <td align="center">
-      <strong>Try-On (Image Upload)</strong><br/>
-      <img src="public/screenshots/tryon.png" width="250"/>
+      <img src="public/screenshots/products.png" width="300"/>
     </td>
   </tr>
   <tr>
     <td align="center">
-      <strong>Cart</strong><br/>
-      <img src="public/screenshots/cart.png" width="250"/>
+      <strong>Try-On (Image Upload)</strong><br/>
+      <img src="public/screenshots/tryon.png" width="300"/>
     </td>
-    <td></td>
-    <td></td>
+    <td align="center">
+      <strong>Cart</strong><br/>
+      <img src="public/screenshots/cart.png" width="300"/>
+    </td>
   </tr>
 </table>
 
