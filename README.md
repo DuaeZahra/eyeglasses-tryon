@@ -51,8 +51,6 @@ npm run dev
 ```
 ## 📸 Screenshots
 
-## 📸 Screenshots
-
 <table>
   <tr>
     <td align="center">
@@ -80,8 +78,8 @@ npm run dev
 
 ## 🗒️ Notes
 
-- This is a **frontend-only prototype** — no backend or database is used.
-- Overlay accuracy is approximate and for demonstration purposes.
-- All glasses and face detection models are loaded from the `public/` folder.
-
-
+- This is a **frontend-only prototype** — there is no backend or database integration.
+- The glasses overlay is approximately aligned for demonstration purposes; it may not be perfectly accurate in all cases.
+- All assets, including eyeglass images and face detection models, are served directly from the `public/` folder.
+- A slight flickering effect may occur when using the webcam try-on feature. However, snapshots capture the correct overlay.  
+  If you find a reliable solution to reduce or eliminate the flicker, contributions are welcome!
