@@ -49,20 +49,33 @@ npm install
 ```bash
 npm run dev
 ```
-
 ## 📸 Screenshots
 
-### Home Page
-![Home Page](public/screenshots/home.png)
+<table>
+  <tr>
+    <td align="center">
+      <strong>Home Page</strong><br/>
+      <img src="public/screenshots/home.png" width="250"/>
+    </td>
+    <td align="center">
+      <strong>Product Listing</strong><br/>
+      <img src="public/screenshots/products.png" width="250"/>
+    </td>
+    <td align="center">
+      <strong>Try-On (Image Upload)</strong><br/>
+      <img src="public/screenshots/tryon.png" width="250"/>
+    </td>
+  </tr>
+  <tr>
+    <td align="center">
+      <strong>Cart</strong><br/>
+      <img src="public/screenshots/cart.png" width="250"/>
+    </td>
+    <td></td>
+    <td></td>
+  </tr>
+</table>
 
-### Product Listing
-![Product ](public/screenshots/products.png)
-
-### Try-On (Image Upload)
-![Try-On ](public/screenshots/tryon.png)
-
-### Cart 
-![Cart ](public/screenshots/cart.png)
 
 
 ## 🗒️ Notes
