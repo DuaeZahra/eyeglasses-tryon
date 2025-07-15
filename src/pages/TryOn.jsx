@@ -1,49 +1,32 @@
 import React, { useRef, useState, useEffect } from 'react';
 import * as faceapi from 'face-api.js';
-import { useSelectedGlasses } from '../context/SelectedGlassesContext';
 
 export default function TryOn() {
   const videoRef = useRef();
   const imageRef = useRef();
   const canvasRef = useRef();
 
-  const [selectedGlasses, setSelectedGlasses] = useState('/glasses1.png');
-  const [glassesImg, setGlassesImg] = useState(null);
+  const [maleGlasses, setMaleGlasses] = useState('/glasses1.png');
+  const [femaleGlasses, setFemaleGlasses] = useState('/glasses4.png');
   const [imageURL, setImageURL] = useState(null);
   const [useWebcam, setUseWebcam] = useState(true);
   const [mirror, setMirror] = useState(true);
   const [loadingWebcam, setLoadingWebcam] = useState(false);
-  const { selectedImage } = useSelectedGlasses();
+  
 
   // Load face-api models
-    useEffect(() => {
-      const loadModels = async () => {
-        await faceapi.nets.tinyFaceDetector.loadFromUri('/models');
-        await faceapi.nets.faceLandmark68Net.loadFromUri('/models');
-      };
-      loadModels();
-    }, []);
-
-  // Syncs image selection to glasses selection
   useEffect(() => {
-    if (selectedImage) {
-      setSelectedGlasses(selectedImage);
-    }
-  }, [selectedImage]);
-
-  // Load selected glasses
-  useEffect(() => {
-    const img = new Image();
-    img.src = selectedGlasses;
-    img.onload = () => setGlassesImg(img);
-  }, [selectedGlasses]);
-
-  // Stop webcam on cleanup
-  useEffect(() => {
-    return () => stopWebcam();
+    const loadModels = async () => {
+      await faceapi.nets.tinyFaceDetector.loadFromUri('/models');
+      await faceapi.nets.faceLandmark68Net.loadFromUri('/models');
+      await faceapi.nets.ageGenderNet.loadFromUri('/models');
+    };
+    loadModels();
   }, []);
 
-  // Handle switching from image to webcam
+  useEffect(() => () => stopWebcam(), []);
+
+  //webcam controls
   useEffect(() => {
     if (useWebcam) {
       setImageURL(null);
@@ -53,28 +36,32 @@ export default function TryOn() {
     }
   }, [useWebcam]);
 
-  // Draw on uploaded image
   useEffect(() => {
-    if (!useWebcam && imageURL && glassesImg) {
-      detectFaceAndDraw();
-    }
-  }, [useWebcam, imageURL, glassesImg]);
+    if (!useWebcam && imageURL) detectFaceAndDraw();
+  }, [useWebcam, imageURL]);
 
-  // Loop detection for webcam
   useEffect(() => {
     let interval;
-    if (useWebcam && videoRef.current && glassesImg) {
+    if (useWebcam && videoRef.current) {
       interval = setInterval(detectFaceAndDraw, 200);
     }
     return () => clearInterval(interval);
-  }, [useWebcam, glassesImg]);
+  }, [useWebcam, maleGlasses, femaleGlasses]);
 
-  
+  // Trigger re-draw on glasses dropdown change
+  useEffect(() => {
+    if (useWebcam) {
+      detectFaceAndDraw(); 
+    } else if (imageURL) {
+      detectFaceAndDraw(); 
+    }
+  }, [maleGlasses, femaleGlasses]);
+
   const startWebcam = async () => {
     try {
       setLoadingWebcam(true);
       const stream = await navigator.mediaDevices.getUserMedia({ video: true });
-      if (videoRef.current?.srcObject) stopWebcam();
+      stopWebcam();
       videoRef.current.srcObject = stream;
       videoRef.current.onloadedmetadata = () => {
         videoRef.current.play();
@@ -113,17 +100,14 @@ export default function TryOn() {
     const snapshotCanvas = document.createElement('canvas');
     snapshotCanvas.width = canvas.width;
     snapshotCanvas.height = canvas.height;
-
     const ctx = snapshotCanvas.getContext('2d');
 
     if (useWebcam && mirror) {
-    // Flip horizontally
-    ctx.translate(snapshotCanvas.width, 0);
-    ctx.scale(-1, 1);
+      ctx.translate(snapshotCanvas.width, 0);
+      ctx.scale(-1, 1);
     }
 
     ctx.drawImage(canvas, 0, 0);
-
     const link = document.createElement('a');
     link.download = 'tryon-snapshot.png';
     link.href = snapshotCanvas.toDataURL('image/png');
@@ -141,18 +125,20 @@ export default function TryOn() {
 
     canvas.width = width;
     canvas.height = height;
-
     const ctx = canvas.getContext('2d');
     ctx.clearRect(0, 0, width, height);
     ctx.drawImage(input, 0, 0, width, height);
 
     const detections = await faceapi
       .detectAllFaces(input, new faceapi.TinyFaceDetectorOptions())
-      .withFaceLandmarks();
+      .withFaceLandmarks()
+      .withAgeAndGender();
 
-    detections.forEach((det) => {
-      const leftEye = det.landmarks.getLeftEye();
-      const rightEye = det.landmarks.getRightEye();
+    for (const det of detections) {
+      const { gender, landmarks } = det;
+
+      const leftEye = landmarks.getLeftEye();
+      const rightEye = landmarks.getRightEye();
 
       const left = leftEye.reduce((acc, pt) => ({ x: acc.x + pt.x, y: acc.y + pt.y }), { x: 0, y: 0 });
       const right = rightEye.reduce((acc, pt) => ({ x: acc.x + pt.x, y: acc.y + pt.y }), { x: 0, y: 0 });
@@ -166,25 +152,31 @@ export default function TryOn() {
       const glassesWidth = Math.sqrt(dx * dx + dy * dy) * 2.5;
       const glassesHeight = glassesWidth / 2.5;
 
-      if (glassesImg) {
-        ctx.save();
-        ctx.translate(eyeCenterX, eyeCenterY);
-        ctx.rotate(angle);
-        ctx.drawImage(
-          glassesImg,
-          -glassesWidth / 2,
-          -glassesHeight / 2,
-          glassesWidth,
-          glassesHeight
-        );
-        ctx.restore();
-      }
-    });
+      const glassesImg = new Image();
+      glassesImg.src = gender === 'male' ? maleGlasses : femaleGlasses;
+
+      await new Promise((resolve) => {
+        glassesImg.onload = () => {
+          ctx.save();
+          ctx.translate(eyeCenterX, eyeCenterY);
+          ctx.rotate(angle);
+          ctx.drawImage(
+            glassesImg,
+            -glassesWidth / 2,
+            -glassesHeight / 2,
+            glassesWidth,
+            glassesHeight
+          );
+          ctx.restore();
+          resolve();
+        };
+      });
+    }
   };
 
   return (
     <div className="min-h-screen bg-gradient-to-b from-blue-100 via-blue-50 to-white flex flex-col items-center py-10 px-4">
-      <h1 className="text-3xl font-bold text-blue-700 mb-6"> TryRoom for the EyeGlasses</h1>
+      <h1 className="text-3xl font-bold text-blue-700 mb-6">TryRoom for the EyeGlasses</h1>
 
       <div className="flex flex-wrap gap-4 justify-center mb-6">
         <button
@@ -201,18 +193,31 @@ export default function TryOn() {
           <input type="file" accept="image/*" onChange={handleFileChange} className="hidden" />
         </label>
 
-        <select
-          value={selectedGlasses}
-          onChange={(e) => setSelectedGlasses(e.target.value)}
-          className="px-3 py-2 rounded-lg border shadow"
-        >
-          <option value="/glasses1.png">Concept</option>
-          <option value="/glasses2.png">Rotem</option>
-          <option value="/glasses3.png">PrimRose</option>
-          <option value="/glasses4.png">Terminal</option>
-          <option value="/glasses5.png">Identity</option>
-          <option value="/glasses6.png">Roaring</option>
-        </select>
+        <div className="flex gap-3 items-center">
+          <label className="text-sm">Male Glasses:</label>
+          <select
+            value={maleGlasses}
+            onChange={(e) => setMaleGlasses(e.target.value)}
+            className="px-3 py-2 rounded-lg border shadow"
+          >
+            <option value="/glasses1.png">Concept</option>
+            <option value="/glasses2.png">Rotem</option>
+            <option value="/glasses3.png">PrimRose</option>
+          </select>
+        </div>
+
+        <div className="flex gap-3 items-center">
+          <label className="text-sm">Female Glasses:</label>
+          <select
+            value={femaleGlasses}
+            onChange={(e) => setFemaleGlasses(e.target.value)}
+            className="px-3 py-2 rounded-lg border shadow"
+          >
+            <option value="/glasses4.png">Terminal</option>
+            <option value="/glasses5.png">Identity</option>
+            <option value="/glasses6.png">Roaring</option>
+          </select>
+        </div>
 
         <button
           onClick={handleSnapshot}

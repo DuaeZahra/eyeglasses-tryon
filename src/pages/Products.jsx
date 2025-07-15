@@ -10,11 +10,10 @@ export default function Products() {
   const { setSelectedImage } = useSelectedGlasses();
   const navigate = useNavigate();
 
-  const handleTryOn = (image) => {
-    setSelectedImage(image);
-    navigate('/tryon');
-  };
-
+  const handleTryOn = (image, gender) => {
+  setSelectedImage(image);
+  navigate('/tryon', { state: { gender } });
+};
   const filtered = products.filter((p) => p.gender === gender);
 
   return (
@@ -33,7 +32,7 @@ export default function Products() {
             Add to Cart
           </button>
           <button
-            onClick={() => handleTryOn(p.image)}
+            onClick={() => handleTryOn(p.image, p.gender)}
             className="border border-blue-600 text-blue-600 py-1 rounded hover:bg-blue-50"
           >
             Try On
