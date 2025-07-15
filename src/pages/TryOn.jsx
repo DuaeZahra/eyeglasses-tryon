@@ -13,17 +13,16 @@ export default function TryOn() {
   const [useWebcam, setUseWebcam] = useState(true);
   const [mirror, setMirror] = useState(true);
   const [loadingWebcam, setLoadingWebcam] = useState(false);
-
   const { selectedImage } = useSelectedGlasses();
 
   // Load face-api models
-  useEffect(() => {
-    const loadModels = async () => {
-      await faceapi.nets.tinyFaceDetector.loadFromUri('/models');
-      await faceapi.nets.faceLandmark68Net.loadFromUri('/models');
-    };
-    loadModels();
-  }, []);
+    useEffect(() => {
+      const loadModels = async () => {
+        await faceapi.nets.tinyFaceDetector.loadFromUri('/models');
+        await faceapi.nets.faceLandmark68Net.loadFromUri('/models');
+      };
+      loadModels();
+    }, []);
 
   // Syncs image selection to glasses selection
   useEffect(() => {
@@ -182,7 +181,6 @@ export default function TryOn() {
       }
     });
   };
-
 
   return (
     <div className="min-h-screen bg-gradient-to-b from-blue-100 via-blue-50 to-white flex flex-col items-center py-10 px-4">
