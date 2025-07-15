@@ -46,7 +46,6 @@ export default function TryOn() {
     if (!useWebcam && imageURL) detectLoop();
   }, [useWebcam, imageURL]);
 
-  // ✅ Redraw when dropdown selections change (for uploaded image)
   useEffect(() => {
     if (!useWebcam && imageURL) detectLoop();
   }, [selectedByGender]);
