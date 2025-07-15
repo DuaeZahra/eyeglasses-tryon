@@ -1,50 +1,38 @@
 import React, { useRef, useState, useEffect } from 'react';
 import * as faceapi from 'face-api.js';
-import { useSelectedGlasses } from '../context/SelectedGlassesContext';
 
 export default function TryOn() {
   const videoRef = useRef();
   const imageRef = useRef();
   const canvasRef = useRef();
 
-  const [selectedGlasses, setSelectedGlasses] = useState('/glasses1.png');
-  const [glassesImg, setGlassesImg] = useState(null);
   const [imageURL, setImageURL] = useState(null);
   const [useWebcam, setUseWebcam] = useState(true);
   const [mirror, setMirror] = useState(true);
   const [loadingWebcam, setLoadingWebcam] = useState(false);
 
-  const { selectedImage } = useSelectedGlasses();
+  const allOptions = [
+    { label: 'Concept', value: '/glasses1.png', gender: 'male' },
+    { label: 'Rotem', value: '/glasses2.png', gender: 'male' },
+    { label: 'PrimRose', value: '/glasses3.png', gender: 'male' },
+    { label: 'Terminal', value: '/glasses4.png', gender: 'female' },
+    { label: 'Identity', value: '/glasses5.png', gender: 'female' },
+    { label: 'Roaring', value: '/glasses6.png', gender: 'female' },
+  ];
+
+  const [genderSeats, setGenderSeats] = useState([]);
+  const [selectedByGender, setSelectedByGender] = useState({
+    male: allOptions.find(o => o.gender === 'male')?.value,
+    female: allOptions.find(o => o.gender === 'female')?.value,
+  });
 
   // Load face-api models
   useEffect(() => {
-    const loadModels = async () => {
-      await faceapi.nets.tinyFaceDetector.loadFromUri('/models');
-      await faceapi.nets.faceLandmark68Net.loadFromUri('/models');
-    };
-    loadModels();
+    faceapi.nets.tinyFaceDetector.loadFromUri('/models');
+    faceapi.nets.faceLandmark68Net.loadFromUri('/models');
+    faceapi.nets.ageGenderNet.loadFromUri('/models');
   }, []);
 
-  // Syncs image selection to glasses selection
-  useEffect(() => {
-    if (selectedImage) {
-      setSelectedGlasses(selectedImage);
-    }
-  }, [selectedImage]);
-
-  // Load selected glasses
-  useEffect(() => {
-    const img = new Image();
-    img.src = selectedGlasses;
-    img.onload = () => setGlassesImg(img);
-  }, [selectedGlasses]);
-
-  // Stop webcam on cleanup
-  useEffect(() => {
-    return () => stopWebcam();
-  }, []);
-
-  // Handle switching from image to webcam
   useEffect(() => {
     if (useWebcam) {
       setImageURL(null);
@@ -54,207 +42,189 @@ export default function TryOn() {
     }
   }, [useWebcam]);
 
-  // Draw on uploaded image
   useEffect(() => {
-    if (!useWebcam && imageURL && glassesImg) {
-      detectFaceAndDraw();
-    }
-  }, [useWebcam, imageURL, glassesImg]);
+    if (!useWebcam && imageURL) detectLoop();
+  }, [useWebcam, imageURL]);
 
-  // Loop detection for webcam
+  // ✅ Redraw when dropdown selections change (for uploaded image)
+  useEffect(() => {
+    if (!useWebcam && imageURL) detectLoop();
+  }, [selectedByGender]);
+
   useEffect(() => {
     let interval;
-    if (useWebcam && videoRef.current && glassesImg) {
-      interval = setInterval(detectFaceAndDraw, 200);
-    }
+    if (useWebcam) interval = setInterval(detectLoop, 200);
     return () => clearInterval(interval);
-  }, [useWebcam, glassesImg]);
+  }, [useWebcam, selectedByGender]);
 
-  
   const startWebcam = async () => {
+    setLoadingWebcam(true);
     try {
-      setLoadingWebcam(true);
       const stream = await navigator.mediaDevices.getUserMedia({ video: true });
-      if (videoRef.current?.srcObject) stopWebcam();
       videoRef.current.srcObject = stream;
       videoRef.current.onloadedmetadata = () => {
         videoRef.current.play();
-        detectFaceAndDraw();
         setLoadingWebcam(false);
       };
-    } catch (err) {
-      console.error('Webcam access error:', err);
+    } catch {
       setLoadingWebcam(false);
     }
   };
 
   const stopWebcam = () => {
-    if (videoRef.current?.srcObject) {
-      videoRef.current.srcObject.getTracks().forEach((track) => track.stop());
+    if (!videoRef.current) return;
+    const stream = videoRef.current.srcObject;
+    if (stream) {
+      stream.getTracks().forEach(track => track.stop());
       videoRef.current.srcObject = null;
     }
   };
 
-  const handleFileChange = (e) => {
-    const file = e.target.files[0];
-    if (file) {
-      const reader = new FileReader();
-      reader.onload = () => {
+  const handleFile = e => {
+    const f = e.target.files?.[0];
+    if (f) {
+      const r = new FileReader();
+      r.onload = () => {
         setUseWebcam(false);
-        setImageURL(reader.result);
+        setImageURL(r.result);
       };
-      reader.readAsDataURL(file);
+      r.readAsDataURL(f);
     }
   };
 
-  const handleSnapshot = () => {
-    const canvas = canvasRef.current;
-    if (!canvas) return;
-
-    const snapshotCanvas = document.createElement('canvas');
-    snapshotCanvas.width = canvas.width;
-    snapshotCanvas.height = canvas.height;
-
-    const ctx = snapshotCanvas.getContext('2d');
-
-    if (useWebcam && mirror) {
-    // Flip horizontally
-    ctx.translate(snapshotCanvas.width, 0);
-    ctx.scale(-1, 1);
-    }
-
-    ctx.drawImage(canvas, 0, 0);
-
-    const link = document.createElement('a');
-    link.download = 'tryon-snapshot.png';
-    link.href = snapshotCanvas.toDataURL('image/png');
-    link.click();
-  };
-
-  const detectFaceAndDraw = async () => {
+  const detectLoop = async () => {
     const input = useWebcam ? videoRef.current : imageRef.current;
     if (!input) return;
 
-    const canvas = canvasRef.current;
-    const width = input.videoWidth || input.naturalWidth;
-    const height = input.videoHeight || input.naturalHeight;
-    if (!width || !height) return;
+    const c = canvasRef.current;
+    const w = input.videoWidth || input.naturalWidth;
+    const h = input.videoHeight || input.naturalHeight;
+    if (!w || !h) return;
 
-    canvas.width = width;
-    canvas.height = height;
+    c.width = w;
+    c.height = h;
+    const ctx = c.getContext('2d');
+    ctx.clearRect(0, 0, w, h);
+    ctx.drawImage(input, 0, 0, w, h);
 
-    const ctx = canvas.getContext('2d');
-    ctx.clearRect(0, 0, width, height);
-    ctx.drawImage(input, 0, 0, width, height);
-
-    const detections = await faceapi
+    const results = await faceapi
       .detectAllFaces(input, new faceapi.TinyFaceDetectorOptions())
-      .withFaceLandmarks();
+      .withFaceLandmarks()
+      .withAgeAndGender();
 
-    detections.forEach((det) => {
-      const leftEye = det.landmarks.getLeftEye();
-      const rightEye = det.landmarks.getRightEye();
+    const seats = [];
+    for (let det of results) {
+      const gender = det.gender === 'male' ? 'male' : 'female';
+      if (!seats.includes(gender)) seats.push(gender);
 
-      const left = leftEye.reduce((acc, pt) => ({ x: acc.x + pt.x, y: acc.y + pt.y }), { x: 0, y: 0 });
-      const right = rightEye.reduce((acc, pt) => ({ x: acc.x + pt.x, y: acc.y + pt.y }), { x: 0, y: 0 });
+      const le = det.landmarks.getLeftEye();
+      const re = det.landmarks.getRightEye();
+      const left = le.reduce((a,p) => ({ x: a.x+p.x, y: a.y+p.y }), { x:0, y:0 });
+      const right = re.reduce((a,p) => ({ x: a.x+p.x, y: a.y+p.y }), { x:0, y:0 });
 
-      const eyeCenterX = (left.x / leftEye.length + right.x / rightEye.length) / 2;
-      const eyeCenterY = (left.y / leftEye.length + right.y / rightEye.length) / 2;
-      const dx = (right.x / rightEye.length) - (left.x / leftEye.length);
-      const dy = (right.y / rightEye.length) - (left.y / leftEye.length);
+      const cx = (left.x/le.length + right.x/re.length) / 2;
+      const cy = (left.y/le.length + right.y/re.length) / 2;
+      const dx = right.x/re.length - left.x/le.length;
+      const dy = right.y/re.length - left.y/le.length;
       const angle = Math.atan2(dy, dx);
+      const gw = Math.hypot(dx, dy) * 2.5;
+      const gh = gw / 2.5;
 
-      const glassesWidth = Math.sqrt(dx * dx + dy * dy) * 2.5;
-      const glassesHeight = glassesWidth / 2.5;
-
-      if (glassesImg) {
+      const img = new Image();
+      img.src = selectedByGender[gender];
+      img.onload = () => {
         ctx.save();
-        ctx.translate(eyeCenterX, eyeCenterY);
+        ctx.translate(cx, cy);
         ctx.rotate(angle);
-        ctx.drawImage(
-          glassesImg,
-          -glassesWidth / 2,
-          -glassesHeight / 2,
-          glassesWidth,
-          glassesHeight
-        );
+        ctx.drawImage(img, -gw/2, -gh/2, gw, gh);
         ctx.restore();
-      }
-    });
+      };
+    }
+    setGenderSeats(seats);
   };
 
+  const snapshot = () => {
+    const c = canvasRef.current; if (!c) return;
+    const s = document.createElement('canvas');
+    s.width = c.width; s.height = c.height;
+    const ctx = s.getContext('2d');
+    if (useWebcam && mirror) { ctx.translate(s.width, 0); ctx.scale(-1, 1); }
+    ctx.drawImage(c, 0, 0);
+    const a = document.createElement('a');
+    a.download = 'tryon.png';
+    a.href = s.toDataURL('image/png');
+    a.click();
+  };
 
   return (
-    <div className="min-h-screen bg-gradient-to-b from-blue-100 via-blue-50 to-white flex flex-col items-center py-10 px-4">
-      <h1 className="text-3xl font-bold text-blue-700 mb-6"> TryRoom for the EyeGlasses</h1>
+    <div className="relative min-h-screen overflow-hidden">
+      {/* Background */}
+      <img src="/background.png" alt="Background" className="absolute inset-0 w-full h-full object-cover -z-20" />
+      <div className="absolute inset-0 bg-white/60 backdrop-blur-md -z-10" />
 
-      <div className="flex flex-wrap gap-4 justify-center mb-6">
-        <button
-          onClick={() => setUseWebcam(true)}
-          className={`px-5 py-2 rounded-lg text-white shadow ${
-            useWebcam ? 'bg-blue-400' : 'bg-blue-600 hover:bg-blue-700'
-          }`}
-        >
-          Use Webcam
-        </button>
+      {/* Main Content */}
+      <div className="relative z-10 flex flex-col items-center py-10 px-4">
+        <h1 className="text-3xl font-bold text-blue-700 mb-6">TryRoom for the EyeGlasses</h1>
 
-        <label className="cursor-pointer bg-white border border-gray-300 hover:bg-gray-100 px-5 py-2 rounded-lg shadow text-gray-800">
-          Upload Image
-          <input type="file" accept="image/*" onChange={handleFileChange} className="hidden" />
-        </label>
+        <div className="flex flex-wrap gap-4 justify-center mb-6">
+          <button onClick={() => setUseWebcam(true)}
+            className={`px-5 py-2 rounded-lg text-white shadow ${useWebcam ? 'bg-blue-400' : 'bg-blue-600 hover:bg-blue-700'}`}>
+            Use Webcam
+          </button>
+          <label className="cursor-pointer bg-white border px-5 py-2 rounded-lg shadow">
+            Upload Image
+            <input type="file" accept="image/*" onChange={handleFile} className="hidden" />
+          </label>
+          <button onClick={snapshot}
+            className="bg-green-600 hover:bg-green-700 text-white px-5 py-2 rounded-lg shadow">
+            Save Snapshot
+          </button>
+        </div>
 
-        <select
-          value={selectedGlasses}
-          onChange={(e) => setSelectedGlasses(e.target.value)}
-          className="px-3 py-2 rounded-lg border shadow"
-        >
-          <option value="/glasses1.png">Concept</option>
-          <option value="/glasses2.png">Rotem</option>
-          <option value="/glasses3.png">PrimRose</option>
-          <option value="/glasses4.png">Terminal</option>
-          <option value="/glasses5.png">Identity</option>
-          <option value="/glasses6.png">Roaring</option>
-        </select>
+        {/* ✅ Side-by-side dropdowns */}
+        <div className="flex flex-wrap justify-center gap-6 mb-6">
+          {genderSeats.includes('male') && (
+            <div className="text-center">
+              <label className="block mb-1 font-medium">Male Glasses:</label>
+              <select
+                value={selectedByGender.male}
+                onChange={e => setSelectedByGender(prev => ({ ...prev, male: e.target.value }))}
+                className="px-4 py-2 border rounded-md shadow">
+                {allOptions.filter(o => o.gender === 'male').map(o => (
+                  <option key={o.value} value={o.value}>{o.label}</option>
+                ))}
+              </select>
+            </div>
+          )}
+          {genderSeats.includes('female') && (
+            <div className="text-center">
+              <label className="block mb-1 font-medium">Female Glasses:</label>
+              <select
+                value={selectedByGender.female}
+                onChange={e => setSelectedByGender(prev => ({ ...prev, female: e.target.value }))}
+                className="px-4 py-2 border rounded-md shadow">
+                {allOptions.filter(o => o.gender === 'female').map(o => (
+                  <option key={o.value} value={o.value}>{o.label}</option>
+                ))}
+              </select>
+            </div>
+          )}
+        </div>
 
-        <button
-          onClick={handleSnapshot}
-          className="bg-green-600 hover:bg-green-700 text-white px-5 py-2 rounded-lg shadow"
-        >
-          Save Snapshot
-        </button>
-      </div>
-
-      <div className="relative w-full max-w-3xl aspect-video border rounded-xl overflow-hidden bg-white shadow">
-        {useWebcam ? (
-          <video
-            ref={videoRef}
-            autoPlay
-            muted
-            playsInline
-            className={`w-full h-full object-cover ${mirror ? 'scale-x-[-1]' : ''}`}
-          />
-        ) : (
-          <img
-            ref={imageRef}
-            src={imageURL}
-            alt="Uploaded"
-            className="w-full h-full object-cover"
-            onLoad={detectFaceAndDraw}
-          />
-        )}
-
-        <canvas
-          ref={canvasRef}
-          className={`absolute top-0 left-0 w-full h-full pointer-events-none ${
-            useWebcam && mirror ? 'scale-x-[-1]' : ''
-          }`}
-        />
-
-        {loadingWebcam && (
-          <div className="absolute inset-0 flex items-center justify-center bg-white/70 z-30">
-            <div className="w-10 h-10 border-4 border-blue-500 border-t-transparent rounded-full animate-spin" />
-          </div>
-        )}
+        {/* Video / Canvas Preview */}
+        <div className="relative w-full max-w-3xl aspect-video border rounded-xl overflow-hidden bg-white shadow">
+          {useWebcam ? (
+            <video ref={videoRef} autoPlay muted playsInline className={`w-full h-full object-cover ${mirror ? 'scale-x-[-1]' : ''}`} />
+          ) : (
+            <img ref={imageRef} src={imageURL} alt="Uploaded" className="w-full h-full object-cover" />
+          )}
+          <canvas ref={canvasRef} className={`absolute top-0 left-0 w-full h-full pointer-events-none ${useWebcam && mirror ? 'scale-x-[-1]' : ''}`} />
+          {loadingWebcam && (
+            <div className="absolute inset-0 flex items-center justify-center bg-white/70 z-30">
+              <div className="w-10 h-10 border-4 border-blue-500 border-t-transparent rounded-full animate-spin" />
+            </div>
+          )}
+        </div>
       </div>
     </div>
   );
