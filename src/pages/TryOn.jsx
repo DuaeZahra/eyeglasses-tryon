@@ -43,7 +43,7 @@ export default function TryOn() {
   useEffect(() => {
     let interval;
     if (useWebcam && videoRef.current) {
-      interval = setInterval(detectFaceAndDraw, 200);
+      interval = setInterval(detectFaceAndDraw, 250);
     }
     return () => clearInterval(interval);
   }, [useWebcam, maleGlasses, femaleGlasses]);
