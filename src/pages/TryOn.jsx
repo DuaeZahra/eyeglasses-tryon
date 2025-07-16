@@ -106,12 +106,12 @@ export default function TryOn() {
   };
 
 
-
   useEffect(() => {
     let interval;
     if (useWebcam) interval = setInterval(detectLoop, 200);
     return () => clearInterval(interval);
   }, [useWebcam, selectedByGender]);
+  
 
   const detectLoop = async () => {
     const input = useWebcam ? videoRef.current : imageRef.current;
@@ -163,7 +163,6 @@ export default function TryOn() {
     }
     setGenderSeats(seats);
   };
-
 
 
   return (
