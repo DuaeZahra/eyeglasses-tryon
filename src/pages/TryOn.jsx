@@ -33,6 +33,7 @@ export default function TryOn() {
     faceapi.nets.ageGenderNet.loadFromUri('/models');
   }, []);
 
+  //webcam
   useEffect(() => {
     if (useWebcam) {
       setImageURL(null);
@@ -42,20 +43,17 @@ export default function TryOn() {
     }
   }, [useWebcam]);
 
+  //for uploaded image 
   useEffect(() => {
     if (!useWebcam && imageURL) detectLoop();
   }, [useWebcam, imageURL]);
 
+  // Redraw when dropdown selections change 
   useEffect(() => {
     if (!useWebcam && imageURL) detectLoop();
   }, [selectedByGender]);
 
-  useEffect(() => {
-    let interval;
-    if (useWebcam) interval = setInterval(detectLoop, 200);
-    return () => clearInterval(interval);
-  }, [useWebcam, selectedByGender]);
-
+  //start webcam
   const startWebcam = async () => {
     setLoadingWebcam(true);
     try {
@@ -70,6 +68,7 @@ export default function TryOn() {
     }
   };
 
+  //stop webcam
   const stopWebcam = () => {
     if (!videoRef.current) return;
     const stream = videoRef.current.srcObject;
@@ -78,7 +77,8 @@ export default function TryOn() {
       videoRef.current.srcObject = null;
     }
   };
-
+  
+  //file handling
   const handleFile = e => {
     const f = e.target.files?.[0];
     if (f) {
@@ -90,6 +90,28 @@ export default function TryOn() {
       r.readAsDataURL(f);
     }
   };
+
+  //snapshot
+  const snapshot = () => {
+    const c = canvasRef.current; if (!c) return;
+    const s = document.createElement('canvas');
+    s.width = c.width; s.height = c.height;
+    const ctx = s.getContext('2d');
+    if (useWebcam && mirror) { ctx.translate(s.width, 0); ctx.scale(-1, 1); }
+    ctx.drawImage(c, 0, 0);
+    const a = document.createElement('a');
+    a.download = 'tryon.png';
+    a.href = s.toDataURL('image/png');
+    a.click();
+  };
+
+
+
+  useEffect(() => {
+    let interval;
+    if (useWebcam) interval = setInterval(detectLoop, 200);
+    return () => clearInterval(interval);
+  }, [useWebcam, selectedByGender]);
 
   const detectLoop = async () => {
     const input = useWebcam ? videoRef.current : imageRef.current;
@@ -142,18 +164,7 @@ export default function TryOn() {
     setGenderSeats(seats);
   };
 
-  const snapshot = () => {
-    const c = canvasRef.current; if (!c) return;
-    const s = document.createElement('canvas');
-    s.width = c.width; s.height = c.height;
-    const ctx = s.getContext('2d');
-    if (useWebcam && mirror) { ctx.translate(s.width, 0); ctx.scale(-1, 1); }
-    ctx.drawImage(c, 0, 0);
-    const a = document.createElement('a');
-    a.download = 'tryon.png';
-    a.href = s.toDataURL('image/png');
-    a.click();
-  };
+
 
   return (
     <div className="relative min-h-screen overflow-hidden">
