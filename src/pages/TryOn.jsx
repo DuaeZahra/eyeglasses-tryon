@@ -5,11 +5,15 @@ export default function TryOn() {
   const videoRef = useRef();
   const imageRef = useRef();
   const canvasRef = useRef();
+  const cachedImages = useRef({}); // Cache for glasses images
+  const cachedFrameRef = useRef(null); // Cache for last drawn frame
+  const faceCache = useRef(null); // Cache for detected faces
 
   const [imageURL, setImageURL] = useState(null);
   const [useWebcam, setUseWebcam] = useState(true);
   const [mirror, setMirror] = useState(true);
   const [loadingWebcam, setLoadingWebcam] = useState(false);
+  const [genderSeats, setGenderSeats] = useState([]);
 
   const allOptions = [
     { label: 'Concept', value: '/glasses1.png', gender: 'male' },
@@ -20,20 +24,29 @@ export default function TryOn() {
     { label: 'Roaring', value: '/glasses6.png', gender: 'female' },
   ];
 
-  const [genderSeats, setGenderSeats] = useState([]);
   const [selectedByGender, setSelectedByGender] = useState({
     male: allOptions.find(o => o.gender === 'male')?.value,
     female: allOptions.find(o => o.gender === 'female')?.value,
   });
 
-  // Load face-api models
+  // Load models and preload glasses images
   useEffect(() => {
-    faceapi.nets.tinyFaceDetector.loadFromUri('/models');
-    faceapi.nets.faceLandmark68Net.loadFromUri('/models');
-    faceapi.nets.ageGenderNet.loadFromUri('/models');
+    (async () => {
+      await faceapi.nets.tinyFaceDetector.loadFromUri('/models');
+      await faceapi.nets.faceLandmark68Net.loadFromUri('/models');
+      await faceapi.nets.ageGenderNet.loadFromUri('/models');
+
+      allOptions.forEach(opt => {
+        const img = new Image();
+        img.src = opt.value;
+        img.onload = () => {
+          cachedImages.current[opt.value] = img;
+        };
+      });
+    })();
   }, []);
 
-  //webcam
+  // Webcam handling
   useEffect(() => {
     if (useWebcam) {
       setImageURL(null);
@@ -43,17 +56,30 @@ export default function TryOn() {
     }
   }, [useWebcam]);
 
-  //for uploaded image 
+  // Detect for uploaded image
   useEffect(() => {
-    if (!useWebcam && imageURL) detectLoop();
+    if (!useWebcam && imageURL) detectAndCacheFaces();
   }, [useWebcam, imageURL]);
 
-  // Redraw when dropdown selections change 
+  // Redraw if dropdown changes
   useEffect(() => {
-    if (!useWebcam && imageURL) detectLoop();
+    if (!useWebcam && imageURL && faceCache.current) {
+      drawLoop();
+    }
   }, [selectedByGender]);
 
-  //start webcam
+  // Webcam detection and draw loop
+  useEffect(() => {
+    let interval;
+    if (useWebcam) {
+      interval = setInterval(async () => {
+        await detectAndCacheFaces();
+        drawLoop();
+      }, 200);
+    }
+    return () => clearInterval(interval);
+  }, [useWebcam, selectedByGender]);
+
   const startWebcam = async () => {
     setLoadingWebcam(true);
     try {
@@ -68,17 +94,14 @@ export default function TryOn() {
     }
   };
 
-  //stop webcam
   const stopWebcam = () => {
-    if (!videoRef.current) return;
-    const stream = videoRef.current.srcObject;
+    const stream = videoRef.current?.srcObject;
     if (stream) {
       stream.getTracks().forEach(track => track.stop());
       videoRef.current.srcObject = null;
     }
   };
-  
-  //file handling
+
   const handleFile = e => {
     const f = e.target.files?.[0];
     if (f) {
@@ -91,13 +114,17 @@ export default function TryOn() {
     }
   };
 
-  //snapshot
   const snapshot = () => {
-    const c = canvasRef.current; if (!c) return;
+    const c = canvasRef.current;
+    if (!c) return;
     const s = document.createElement('canvas');
-    s.width = c.width; s.height = c.height;
+    s.width = c.width;
+    s.height = c.height;
     const ctx = s.getContext('2d');
-    if (useWebcam && mirror) { ctx.translate(s.width, 0); ctx.scale(-1, 1); }
+    if (useWebcam && mirror) {
+      ctx.translate(s.width, 0);
+      ctx.scale(-1, 1);
+    }
     ctx.drawImage(c, 0, 0);
     const a = document.createElement('a');
     a.download = 'tryon.png';
@@ -105,64 +132,80 @@ export default function TryOn() {
     a.click();
   };
 
-
-  useEffect(() => {
-    let interval;
-    if (useWebcam) interval = setInterval(detectLoop, 200);
-    return () => clearInterval(interval);
-  }, [useWebcam, selectedByGender]);
-  
-
-  const detectLoop = async () => {
+  const detectAndCacheFaces = async () => {
     const input = useWebcam ? videoRef.current : imageRef.current;
     if (!input) return;
 
-    const c = canvasRef.current;
     const w = input.videoWidth || input.naturalWidth;
     const h = input.videoHeight || input.naturalHeight;
     if (!w || !h) return;
-
-    c.width = w;
-    c.height = h;
-    const ctx = c.getContext('2d');
-    ctx.clearRect(0, 0, w, h);
-    ctx.drawImage(input, 0, 0, w, h);
 
     const results = await faceapi
       .detectAllFaces(input, new faceapi.TinyFaceDetectorOptions())
       .withFaceLandmarks()
       .withAgeAndGender();
 
-    const seats = [];
-    for (let det of results) {
-      const gender = det.gender === 'male' ? 'male' : 'female';
-      if (!seats.includes(gender)) seats.push(gender);
-
-      const le = det.landmarks.getLeftEye();
-      const re = det.landmarks.getRightEye();
-      const left = le.reduce((a,p) => ({ x: a.x+p.x, y: a.y+p.y }), { x:0, y:0 });
-      const right = re.reduce((a,p) => ({ x: a.x+p.x, y: a.y+p.y }), { x:0, y:0 });
-
-      const cx = (left.x/le.length + right.x/re.length) / 2;
-      const cy = (left.y/le.length + right.y/re.length) / 2;
-      const dx = right.x/re.length - left.x/le.length;
-      const dy = right.y/re.length - left.y/le.length;
-      const angle = Math.atan2(dy, dx);
-      const gw = Math.hypot(dx, dy) * 2.5;
-      const gh = gw / 2.5;
-
-      const img = new Image();
-      img.src = selectedByGender[gender];
-      img.onload = () => {
-        ctx.save();
-        ctx.translate(cx, cy);
-        ctx.rotate(angle);
-        ctx.drawImage(img, -gw/2, -gh/2, gw, gh);
-        ctx.restore();
-      };
-    }
-    setGenderSeats(seats);
+    // Cache detected faces
+    faceCache.current = results;
+    setGenderSeats([...new Set(results.map(det => det.gender))]);
   };
+
+  const drawLoop = () => {
+  const input = useWebcam ? videoRef.current : imageRef.current;
+  if (!input) return;
+
+  const c = canvasRef.current;
+  const ctx = c.getContext('2d');
+  const w = input.videoWidth || input.naturalWidth;
+  const h = input.videoHeight || input.naturalHeight;
+
+  c.width = w;
+  c.height = h;
+
+  // Always draw current input frame
+  ctx.clearRect(0, 0, w, h);
+  ctx.drawImage(input, 0, 0, w, h);
+
+  // If no faces are detected, reuse the last cached frame
+  if (!faceCache.current || faceCache.current.length === 0) {
+    if (cachedFrameRef.current) {
+      ctx.drawImage(cachedFrameRef.current, 0, 0, w, h);
+    }
+    return;
+  }
+
+  // Draw glasses for each detected face
+  faceCache.current.forEach(det => {
+    const gender = det.gender === 'male' ? 'male' : 'female';
+    const le = det.landmarks.getLeftEye();
+    const re = det.landmarks.getRightEye();
+    const left = le.reduce((a, p) => ({ x: a.x + p.x, y: a.y + p.y }), { x: 0, y: 0 });
+    const right = re.reduce((a, p) => ({ x: a.x + p.x, y: a.y + p.y }), { x: 0, y: 0 });
+
+    const cx = (left.x / le.length + right.x / re.length) / 2;
+    const cy = (left.y / le.length + right.y / re.length) / 2;
+    const dx = right.x / re.length - left.x / le.length;
+    const dy = right.y / re.length - left.y / le.length;
+    const angle = Math.atan2(dy, dx);
+    const gw = Math.hypot(dx, dy) * 2.5;
+    const gh = gw / 2.5;
+
+    const glassesImg = cachedImages.current[selectedByGender[gender]];
+    if (glassesImg) {
+      ctx.save();
+      ctx.translate(cx, cy);
+      ctx.rotate(angle);
+      ctx.drawImage(glassesImg, -gw / 2, -gh / 2, gw, gh);
+      ctx.restore();
+    }
+  });
+
+  // Cache this fully rendered frame
+  cachedFrameRef.current = document.createElement('canvas');
+  cachedFrameRef.current.width = w;
+  cachedFrameRef.current.height = h;
+  cachedFrameRef.current.getContext('2d').drawImage(c, 0, 0, w, h);
+};
 
 
   return (
@@ -190,7 +233,7 @@ export default function TryOn() {
           </button>
         </div>
 
-        {/* ✅ Side-by-side dropdowns */}
+        {/* Gender-based Glasses Dropdowns */}
         <div className="flex flex-wrap justify-center gap-6 mb-6">
           {genderSeats.includes('male') && (
             <div className="text-center">
@@ -238,3 +281,5 @@ export default function TryOn() {
     </div>
   );
 }
+
+  
