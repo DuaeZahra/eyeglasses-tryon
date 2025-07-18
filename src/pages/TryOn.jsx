@@ -5,14 +5,14 @@ export default function TryOn() {
   const videoRef = useRef();
   const imageRef = useRef();
   const canvasRef = useRef();
-  const cachedImages = useRef({}); // Cache for glasses images
-  const cachedFrameRef = useRef(null); // Cache for last drawn frame
-  const faceCache = useRef(null); // Cache for detected faces
+  const cachedImages = useRef({});
+  const cachedFrameRef = useRef(null);
+  const faceCache = useRef([]);
 
   const [imageURL, setImageURL] = useState(null);
   const [useWebcam, setUseWebcam] = useState(true);
   const [mirror, setMirror] = useState(true);
-  const [loadingWebcam, setLoadingWebcam] = useState(false);
+  const [modeLoading, setModeLoading] = useState(false);
   const [genderSeats, setGenderSeats] = useState([]);
 
   const allOptions = [
@@ -29,7 +29,7 @@ export default function TryOn() {
     female: allOptions.find(o => o.gender === 'female')?.value,
   });
 
-  // Load models and preload glasses images
+  // Load models and preload glasses
   useEffect(() => {
     (async () => {
       await faceapi.nets.tinyFaceDetector.loadFromUri('/models');
@@ -46,29 +46,44 @@ export default function TryOn() {
     })();
   }, []);
 
-  // Webcam handling
-  useEffect(() => {
-    if (useWebcam) {
-      setImageURL(null);
-      startWebcam();
-    } else {
-      stopWebcam();
-    }
-  }, [useWebcam]);
+  // Webcam handling 
+useEffect(() => {
+  if (useWebcam) {
+    setModeLoading(true);
+    setImageURL(null);
 
-  // Detect for uploaded image
+    // Delay only when switching to webcam
+    const timer = setTimeout(() => {
+      startWebcam().then(() => setModeLoading(false));
+    }, 500); // 0.5 second delay
+
+    return () => clearTimeout(timer);
+  } else {
+    stopWebcam();
+  }
+}, [useWebcam]);
+
+
+  // Handle uploaded image
   useEffect(() => {
-    if (!useWebcam && imageURL) detectAndCacheFaces();
+    if (!useWebcam && imageURL) {
+      const img = imageRef.current;
+      if (img.complete && img.naturalWidth > 0) {
+        processUploadedImage();
+      } else {
+        img.onload = () => processUploadedImage();
+      }
+    }
   }, [useWebcam, imageURL]);
 
-  // Redraw if dropdown changes
+  // Redraw when glasses change
   useEffect(() => {
-    if (!useWebcam && imageURL && faceCache.current) {
+    if (!useWebcam && imageURL && faceCache.current.length > 0) {
       drawLoop();
     }
   }, [selectedByGender]);
 
-  // Webcam detection and draw loop
+  // Webcam detection loop
   useEffect(() => {
     let interval;
     if (useWebcam) {
@@ -81,16 +96,17 @@ export default function TryOn() {
   }, [useWebcam, selectedByGender]);
 
   const startWebcam = async () => {
-    setLoadingWebcam(true);
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ video: true });
-      videoRef.current.srcObject = stream;
-      videoRef.current.onloadedmetadata = () => {
-        videoRef.current.play();
-        setLoadingWebcam(false);
-      };
+      return new Promise(resolve => {
+        videoRef.current.srcObject = stream;
+        videoRef.current.onloadedmetadata = () => {
+          videoRef.current.play();
+          resolve();
+        };
+      });
     } catch {
-      setLoadingWebcam(false);
+      setModeLoading(false);
     }
   };
 
@@ -108,10 +124,17 @@ export default function TryOn() {
       const r = new FileReader();
       r.onload = () => {
         setUseWebcam(false);
+        setModeLoading(true);
         setImageURL(r.result);
       };
       r.readAsDataURL(f);
     }
+  };
+
+  const processUploadedImage = async () => {
+    await detectAndCacheFaces();
+    drawLoop();
+    setModeLoading(false);
   };
 
   const snapshot = () => {
@@ -145,68 +168,56 @@ export default function TryOn() {
       .withFaceLandmarks()
       .withAgeAndGender();
 
-    // Cache detected faces
     faceCache.current = results;
     setGenderSeats([...new Set(results.map(det => det.gender))]);
   };
 
   const drawLoop = () => {
-  const input = useWebcam ? videoRef.current : imageRef.current;
-  if (!input) return;
+    const input = useWebcam ? videoRef.current : imageRef.current;
+    if (!input || faceCache.current.length === 0) return;
 
-  const c = canvasRef.current;
-  const ctx = c.getContext('2d');
-  const w = input.videoWidth || input.naturalWidth;
-  const h = input.videoHeight || input.naturalHeight;
+    const c = canvasRef.current;
+    const w = input.videoWidth || input.naturalWidth;
+    const h = input.videoHeight || input.naturalHeight;
+    if (!w || !h) return;
 
-  c.width = w;
-  c.height = h;
+    const ctx = c.getContext('2d');
+    c.width = w;
+    c.height = h;
 
-  // Always draw current input frame
-  ctx.clearRect(0, 0, w, h);
-  ctx.drawImage(input, 0, 0, w, h);
+    ctx.clearRect(0, 0, w, h);
+    ctx.drawImage(input, 0, 0, w, h);
 
-  // If no faces are detected, reuse the last cached frame
-  if (!faceCache.current || faceCache.current.length === 0) {
-    if (cachedFrameRef.current) {
-      ctx.drawImage(cachedFrameRef.current, 0, 0, w, h);
-    }
-    return;
-  }
+    faceCache.current.forEach(det => {
+      const gender = det.gender === 'male' ? 'male' : 'female';
+      const le = det.landmarks.getLeftEye();
+      const re = det.landmarks.getRightEye();
+      const left = le.reduce((a, p) => ({ x: a.x + p.x, y: a.y + p.y }), { x: 0, y: 0 });
+      const right = re.reduce((a, p) => ({ x: a.x + p.x, y: a.y + p.y }), { x: 0, y: 0 });
 
-  // Draw glasses for each detected face
-  faceCache.current.forEach(det => {
-    const gender = det.gender === 'male' ? 'male' : 'female';
-    const le = det.landmarks.getLeftEye();
-    const re = det.landmarks.getRightEye();
-    const left = le.reduce((a, p) => ({ x: a.x + p.x, y: a.y + p.y }), { x: 0, y: 0 });
-    const right = re.reduce((a, p) => ({ x: a.x + p.x, y: a.y + p.y }), { x: 0, y: 0 });
+      const cx = (left.x / le.length + right.x / re.length) / 2;
+      const cy = (left.y / le.length + right.y / re.length) / 2;
+      const dx = right.x / re.length - left.x / le.length;
+      const dy = right.y / re.length - left.y / le.length;
+      const angle = Math.atan2(dy, dx);
+      const gw = Math.hypot(dx, dy) * 2.5;
+      const gh = gw / 2.5;
 
-    const cx = (left.x / le.length + right.x / re.length) / 2;
-    const cy = (left.y / le.length + right.y / re.length) / 2;
-    const dx = right.x / re.length - left.x / le.length;
-    const dy = right.y / re.length - left.y / le.length;
-    const angle = Math.atan2(dy, dx);
-    const gw = Math.hypot(dx, dy) * 2.5;
-    const gh = gw / 2.5;
+      const glassesImg = cachedImages.current[selectedByGender[gender]];
+      if (glassesImg) {
+        ctx.save();
+        ctx.translate(cx, cy);
+        ctx.rotate(angle);
+        ctx.drawImage(glassesImg, -gw / 2, -gh / 2, gw, gh);
+        ctx.restore();
+      }
+    });
 
-    const glassesImg = cachedImages.current[selectedByGender[gender]];
-    if (glassesImg) {
-      ctx.save();
-      ctx.translate(cx, cy);
-      ctx.rotate(angle);
-      ctx.drawImage(glassesImg, -gw / 2, -gh / 2, gw, gh);
-      ctx.restore();
-    }
-  });
-
-  // Cache this fully rendered frame
-  cachedFrameRef.current = document.createElement('canvas');
-  cachedFrameRef.current.width = w;
-  cachedFrameRef.current.height = h;
-  cachedFrameRef.current.getContext('2d').drawImage(c, 0, 0, w, h);
-};
-
+    cachedFrameRef.current = document.createElement('canvas');
+    cachedFrameRef.current.width = w;
+    cachedFrameRef.current.height = h;
+    cachedFrameRef.current.getContext('2d').drawImage(c, 0, 0, w, h);
+  };
 
   return (
     <div className="relative min-h-screen overflow-hidden">
@@ -218,8 +229,10 @@ export default function TryOn() {
       <div className="relative z-10 flex flex-col items-center py-10 px-4">
         <h1 className="text-3xl font-bold text-blue-700 mb-6">TryRoom for the EyeGlasses</h1>
 
+        {/* Controls */}
         <div className="flex flex-wrap gap-4 justify-center mb-6">
-          <button onClick={() => setUseWebcam(true)}
+          <button
+            onClick={() => setUseWebcam(true)}
             className={`px-5 py-2 rounded-lg text-white shadow ${useWebcam ? 'bg-blue-400' : 'bg-blue-600 hover:bg-blue-700'}`}>
             Use Webcam
           </button>
@@ -227,7 +240,8 @@ export default function TryOn() {
             Upload Image
             <input type="file" accept="image/*" onChange={handleFile} className="hidden" />
           </label>
-          <button onClick={snapshot}
+          <button
+            onClick={snapshot}
             className="bg-green-600 hover:bg-green-700 text-white px-5 py-2 rounded-lg shadow">
             Save Snapshot
           </button>
@@ -266,13 +280,28 @@ export default function TryOn() {
         {/* Video / Canvas Preview */}
         <div className="relative w-full max-w-3xl aspect-video border rounded-xl overflow-hidden bg-white shadow">
           {useWebcam ? (
-            <video ref={videoRef} autoPlay muted playsInline className={`w-full h-full object-cover ${mirror ? 'scale-x-[-1]' : ''}`} />
+            <video
+              ref={videoRef}
+              autoPlay
+              muted
+              playsInline
+              className={`w-full h-full object-cover transition-opacity duration-300 ${
+                mirror ? 'scale-x-[-1]' : ''
+              } ${modeLoading ? 'opacity-0' : 'opacity-100'}`}
+            />
           ) : (
             <img ref={imageRef} src={imageURL} alt="Uploaded" className="w-full h-full object-cover" />
           )}
-          <canvas ref={canvasRef} className={`absolute top-0 left-0 w-full h-full pointer-events-none ${useWebcam && mirror ? 'scale-x-[-1]' : ''}`} />
-          {loadingWebcam && (
-            <div className="absolute inset-0 flex items-center justify-center bg-white/70 z-30">
+          <canvas
+            ref={canvasRef}
+            className={`absolute top-0 left-0 w-full h-full pointer-events-none ${
+              useWebcam && mirror ? 'scale-x-[-1]' : ''
+            }`}
+          />
+
+          {/* Loading Spinner */}
+          {modeLoading && (
+            <div className="absolute inset-0 flex items-center justify-center bg-white/70 z-40">
               <div className="w-10 h-10 border-4 border-blue-500 border-t-transparent rounded-full animate-spin" />
             </div>
           )}
@@ -281,5 +310,3 @@ export default function TryOn() {
     </div>
   );
 }
-
-  
