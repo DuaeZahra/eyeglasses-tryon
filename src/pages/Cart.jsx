@@ -25,7 +25,7 @@ export default function Cart() {
 
       {/* Content */}
       <div className="relative z-10 p-6 max-w-3xl mx-auto min-h-screen">
-        <h2 className="text-3xl font-bold mb-6 text-center text-gray-800">🛒 Your Cart</h2>
+        <h2 className="text-3xl font-bold mb-6 text-center text-gray-800">🛒</h2>
 
         {cartItems.length === 0 ? (
           <div className="text-center text-gray-500 text-lg">Your cart is empty.</div>

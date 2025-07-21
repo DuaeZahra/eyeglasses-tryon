@@ -54,7 +54,7 @@ export default function Home() {
           {/* Text Section */}
           <div className="max-w-xl text-center lg:text-left space-y-6">
             <h1 className="text-5xl font-extrabold text-gray-800 leading-tight">
-              Welcome to <span className="text-blue-600">EyeGlasses Store</span>
+              Welcome to <span className="text-blue-600">EyeMate</span>
             </h1>
             <p className="text-lg text-gray-600">
               Explore our collection of stylish eyeglass frames and experience the future of eyewear shopping.
