@@ -1,6 +1,5 @@
 import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { useSelectedGlasses } from '../context/SelectedGlassesContext';
 
 const heroImages = [
   { src: '/glasses1.png', name: 'Concept' },
@@ -15,7 +14,6 @@ export default function Home() {
   const [currentImage, setCurrentImage] = useState(0);
   const [isHovered, setIsHovered] = useState(false);
   const navigate = useNavigate();
-  const { setSelectedImage } = useSelectedGlasses();
 
   useEffect(() => {
     if (isHovered) return;
@@ -33,10 +31,10 @@ export default function Home() {
     setCurrentImage((prev) => (prev + 1) % heroImages.length);
   };
 
-  const handleClick = (imgSrc) => {
-    setSelectedImage(imgSrc);
-    navigate('/tryon');
-  };
+  const handleClick = () => {
+  navigate('/tryon'); 
+};
+
 
   return (
     <div className="relative min-h-screen overflow-hidden">
@@ -63,18 +61,19 @@ export default function Home() {
               Try on frames in real-time with your webcam or an uploaded photo.
             </p>
             <div className="flex flex-col sm:flex-row gap-4 justify-center lg:justify-start pt-2">
-              <a
-                href="/products"
-                className="flex items-center justify-center gap-2 bg-blue-600 text-white px-6 py-3 rounded-lg shadow-md hover:bg-blue-700 transition"
-              >
-                Browse Frames
-              </a>
-              <a
-                href="/tryon"
-                className="flex items-center justify-center gap-2 border border-blue-600 text-blue-600 px-6 py-3 rounded-lg hover:bg-blue-100 transition"
-              >
-                 Try Now
-              </a>
+              <button
+              onClick={() => navigate('/products')}
+              className="flex items-center justify-center gap-2 bg-blue-600 text-white px-6 py-3 rounded-lg shadow-md hover:bg-blue-700 transition"
+            >
+              Browse Frames
+            </button>
+            <button
+              onClick={() => navigate('/tryon')}
+              className="flex items-center justify-center gap-2 border border-blue-600 text-blue-600 px-6 py-3 rounded-lg hover:bg-blue-100 transition"
+            >
+              Try Now
+            </button>
+
             </div>
           </div>
 

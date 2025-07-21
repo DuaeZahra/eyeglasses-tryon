@@ -1,5 +1,6 @@
 import React, { useRef, useState, useEffect } from 'react';
 import * as faceapi from 'face-api.js';
+import { useSelectedGlasses } from '../context/SelectedGlassesContext';
 
 export default function TryOn() {
   const videoRef = useRef();
@@ -24,10 +25,23 @@ export default function TryOn() {
     { label: 'Roaring', value: '/glasses6.png', gender: 'female' },
   ];
 
+  const { selectedImage } = useSelectedGlasses();
+
   const [selectedByGender, setSelectedByGender] = useState({
-    male: allOptions.find(o => o.gender === 'male')?.value,
-    female: allOptions.find(o => o.gender === 'female')?.value,
+    male: '/glasses1.png',
+    female: '/glasses4.png',
   });
+
+  // Initialize selected glasses with what was chosen from Products
+  useEffect(() => {
+    if (selectedImage) {
+      setSelectedByGender((prev) => ({
+        ...prev,
+        male: selectedImage,
+        female: selectedImage,
+      }));
+    }
+  }, [selectedImage]);
 
   // Load models and preload glasses
   useEffect(() => {
@@ -47,21 +61,21 @@ export default function TryOn() {
   }, []);
 
   // Webcam handling 
-useEffect(() => {
-  if (useWebcam) {
-    setModeLoading(true);
-    setImageURL(null);
+  useEffect(() => {
+    if (useWebcam) {
+      setModeLoading(true);
+      setImageURL(null);
 
-    // Delay only when switching to webcam
-    const timer = setTimeout(() => {
-      startWebcam().then(() => setModeLoading(false));
-    }, 500); // 0.5 second delay
+      // Delay only when switching to webcam
+      const timer = setTimeout(() => {
+        startWebcam().then(() => setModeLoading(false));
+      }, 500); // 0.5 second delay
 
-    return () => clearTimeout(timer);
-  } else {
-    stopWebcam();
-  }
-}, [useWebcam]);
+      return () => clearTimeout(timer);
+    } else {
+      stopWebcam();
+    }
+  }, [useWebcam]);
 
 
   // Handle uploaded image

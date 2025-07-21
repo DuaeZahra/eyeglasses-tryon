@@ -6,13 +6,18 @@ import { useSelectedGlasses } from '../context/SelectedGlassesContext';
 export default function Products() {
   const { gender } = useParams();
   const { addToCart } = useCart();
-  const { setSelectedImage } = useSelectedGlasses();
   const navigate = useNavigate();
 
-  const handleTryOn = (image, gender) => {
-    setSelectedImage(image);
-    navigate('/tryon', { state: { gender } });
-  };
+  const { setSelectedProduct, setSelectedImage } = useSelectedGlasses();
+
+  const handleTryOn = (product) => {
+  console.log("Try On clicked for:", product);
+  setSelectedProduct(product);
+  setSelectedImage(product.image);
+  navigate('/tryon');
+};
+
+
 
   const filtered = products.filter((p) => p.gender === gender);
 
@@ -52,7 +57,7 @@ export default function Products() {
                   Add to Cart
                 </button>
                 <button
-                  onClick={() => handleTryOn(p.image, p.gender)}
+                  onClick={() => handleTryOn(p)}
                   className="border border-blue-600 text-blue-600 py-2 rounded-md hover:bg-blue-50 transition"
                 >
                   Try On

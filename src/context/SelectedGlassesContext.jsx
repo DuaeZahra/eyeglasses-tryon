@@ -1,15 +1,16 @@
-import { createContext, useContext, useState } from 'react'
+import { createContext, useContext, useState } from 'react';
 
-const SelectedGlassesContext = createContext()
+const SelectedGlassesContext = createContext();
 
 export const SelectedGlassesProvider = ({ children }) => {
-  const [selectedImage, setSelectedImage] = useState('/glasses1.png') // default
+  const [selectedProduct, setSelectedProduct] = useState(null);  
+  const [selectedImage, setSelectedImage] = useState(null);      
 
   return (
-    <SelectedGlassesContext.Provider value={{ selectedImage, setSelectedImage }}>
+    <SelectedGlassesContext.Provider value={{ selectedProduct, setSelectedProduct, selectedImage, setSelectedImage }}>
       {children}
     </SelectedGlassesContext.Provider>
-  )
-}
+  );
+};
 
-export const useSelectedGlasses = () => useContext(SelectedGlassesContext)
+export const useSelectedGlasses = () => useContext(SelectedGlassesContext);
