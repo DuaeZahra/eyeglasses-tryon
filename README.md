@@ -61,6 +61,10 @@ npm run dev
       <strong>Product Listing</strong><br/>
       <img src="public/screenshots/products.png" width="300"/>
     </td>
+    <td align="center">
+      <strong>Product Listing</strong><br/>
+      <img src="public/screenshots/products2.png" width="300"/>
+    </td>
   </tr>
   <tr>
     <td align="center">
