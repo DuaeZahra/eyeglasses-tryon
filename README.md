@@ -65,7 +65,7 @@ npm run dev
   <tr>
     <td align="center">
       <strong>Try-On (Image Upload)</strong><br/>
-      <img src="public/screenshots/tryon.png" width="300"/>
+      <img src="public/screenshots/tryon2.png" width="300"/>
     </td>
     <td align="center">
       <strong>Cart</strong><br/>
