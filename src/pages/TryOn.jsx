@@ -27,9 +27,10 @@ export default function TryOn() {
   const [faceMeshReady, setFaceMeshReady] = useState(false);
 
   const { selectedImage, setSelectedImage } = useSelectedGlasses();
-  const allOptions = [{ label: 'Glasses 1', value: '/oculos.obj' }];
+  const allOptions = [{ label: 'Glasses 1', value: '/oculos.obj'                     
+   }];
 
-  // Initialization 
+  // Initialization
   useEffect(() => {
     let isMounted = true;
 
@@ -42,37 +43,40 @@ export default function TryOn() {
       setModeLoading(true);
       console.log("Initializing FaceMesh and Three.js...");
 
-      // Initialize FaceMesh
+      // FaceMesh 
       const faceMesh = new mpFaceMesh.FaceMesh({
         locateFile: (file) => `https://cdn.jsdelivr.net/npm/@mediapipe/face_mesh/${file}`,
       });
+
       faceMesh.setOptions({
         maxNumFaces: 1,
         refineLandmarks: true,
         minDetectionConfidence: 0.7,
         minTrackingConfidence: 0.7,
       });
+
       faceMesh.onResults((results) => {
         faceCache.current = results.multiFaceLandmarks?.map((landmarks) => ({ landmarks })) || [];
       });
+
       faceMeshRef.current = faceMesh;
       setFaceMeshReady(true);
 
-      // Initialize Three.js Scene 
+      // Three.js Scene 
       sceneRef.current = new THREE.Scene();
-      const canvasWidth = threeCanvasRef.current.clientWidth || 640;
-      const canvasHeight = threeCanvasRef.current.clientHeight || 480;
 
-      // orthographic camera 
-      const frustumSize = 2;
+      const canvasWidth = threeCanvasRef.current.clientWidth;
+      const canvasHeight = threeCanvasRef.current.clientHeight;
       const aspect = canvasWidth / canvasHeight;
-      threeCameraRef.current = new THREE.OrthographicCamera(
-        -frustumSize * aspect / 2, frustumSize * aspect / 2,
-        frustumSize / 2, -frustumSize / 2,
-        0.1, 1000
-      );
-      threeCameraRef.current.position.z = 10;
 
+      // PerspectiveCamera for 3D alignment
+      const fov = 45;
+      const near = 0.1;
+      const far = 1000;
+      threeCameraRef.current = new THREE.PerspectiveCamera(fov, aspect, near, far);
+      threeCameraRef.current.position.z = 2.5; 
+
+      // Renderer
       try {
         rendererRef.current = new THREE.WebGLRenderer({
           canvas: threeCanvasRef.current,
@@ -81,47 +85,43 @@ export default function TryOn() {
         });
         rendererRef.current.setSize(canvasWidth, canvasHeight);
         rendererRef.current.setPixelRatio(window.devicePixelRatio);
-        rendererRef.current.setClearColor(0x000000, 0);
+        rendererRef.current.setClearColor(0x000000, 0); // Transparent background
       } catch (err) {
         console.error("Renderer initialization failed:", err);
         setModeLoading(false);
         return;
       }
 
-      // Lighting 
+      // Lighting
       sceneRef.current.add(new THREE.AmbientLight(0xffffff, 0.8));
       const directionalLight = new THREE.DirectionalLight(0xffffff, 0.4);
       directionalLight.position.set(0, 1, 1);
       sceneRef.current.add(directionalLight);
 
-      // Load Glasses Models 
+      //  Load Glasses Models 
       const loader = new OBJLoader();
+
       const loadModel = (path) =>
         new Promise((resolve, reject) => {
           loader.load(
             path,
             (obj) => {
               console.log(`Glasses model loaded: ${path}`);
-              
+
+              // Center model
               const box = new THREE.Box3().setFromObject(obj);
               const center = box.getCenter(new THREE.Vector3());
               obj.position.sub(center);
-              
-              const size = box.getSize(new THREE.Vector3());
-              const maxDim = Math.max(size.x, size.y, size.z);
-              const targetSize = 0.3;
-              const scale = targetSize / maxDim;
-              obj.scale.set(scale, scale, scale);
-              
+
               obj.visible = false;
 
               obj.traverse((child) => {
                 if (child.isMesh) {
                   if (!child.material) {
-                    child.material = new THREE.MeshStandardMaterial({ 
+                    child.material = new THREE.MeshStandardMaterial({
                       color: 0x333333,
                       metalness: 0.1,
-                      roughness: 0.4
+                      roughness: 0.4,
                     });
                   }
                   child.castShadow = true;
@@ -130,7 +130,7 @@ export default function TryOn() {
               });
 
               cachedModels.current[path] = obj;
-              sceneRef.current?.add(obj);
+              sceneRef.current.add(obj);
               resolve();
             },
             undefined,
@@ -155,11 +155,15 @@ export default function TryOn() {
     };
 
     const timer = setTimeout(init, 100);
+
+    // -------------------- Cleanup --------------------
     return () => {
       isMounted = false;
       clearTimeout(timer);
+
       faceMeshRef.current?.close();
       faceMeshRef.current = null;
+
       cameraRef.current?.stop();
       cameraRef.current = null;
 
@@ -187,6 +191,7 @@ export default function TryOn() {
       cancelAnimationFrame(animationFrameId.current);
     };
   }, []);
+
 
   // Webcam Handling 
   useEffect(() => {
@@ -316,6 +321,8 @@ export default function TryOn() {
     threeCameraRef.current.right = frustumSize * aspect / 2;
     threeCameraRef.current.top = frustumSize / 2;
     threeCameraRef.current.bottom = -frustumSize / 2;
+    threeCameraRef.current.scale.x = -1; 
+
     threeCameraRef.current.updateProjectionMatrix();
 
     if (faceMeshReady && faceMeshRef.current && imageRef.current) {
@@ -386,16 +393,16 @@ export default function TryOn() {
     // Key landmarks
     const leftEyeInner  = landmarks[133];
     const rightEyeInner = landmarks[362];
-    const leftEyeOuter  = landmarks[33];
-    const rightEyeOuter = landmarks[263];
-    const forehead      = landmarks[10];
+    const leftEyeOuter  = landmarks[143];
+    const rightEyeOuter = landmarks[372];
+    const forehead      = landmarks[168];
     const chinTip       = landmarks[175];
 
     // Canvas dimensions required for conversion of coords
     const canvasWidth  = threeCanvasRef.current.width;
     const canvasHeight = threeCanvasRef.current.height;
     const aspect       = canvasWidth / canvasHeight;
-    const frustumSize  = 2;
+    const frustumSize  = 1.6;
 
     // Map FaceMesh normalized coords to Three.js coords
     const convertCoords = (lm) => {
@@ -506,13 +513,15 @@ export default function TryOn() {
             <img ref={imageRef} src={imageURL} alt="Uploaded" className="w-full h-full object-cover" />
           )}
           <canvas
-            ref={canvasRef}
-            className={`absolute top-0 left-0 w-full h-full pointer-events-none ${useWebcam ? 'scale-x-[-1]' : ''}`}
-          />
-          <canvas
-            ref={threeCanvasRef}
-            className={`absolute top-0 left-0 w-full h-full pointer-events-none ${useWebcam ? 'scale-x-[-1]' : ''}`}
-          />
+              ref={canvasRef}
+              className={`absolute inset-0 w-full h-full object-cover pointer-events-none ${useWebcam ? 'scale-x-[-1]' : ''}`}
+            />
+
+            {/* 3D Canvas */}
+            <canvas
+              ref={threeCanvasRef}
+              className={`absolute inset-0 w-full h-full object-cover pointer-events-none ${useWebcam ? 'scale-x-[-1]' : ''}`}
+            />
           {modeLoading && (
             <div className="absolute inset-0 flex items-center justify-center bg-white/70 z-40">
               <div className="w-10 h-10 border-4 border-blue-500 border-t-transparent rounded-full animate-spin" />
