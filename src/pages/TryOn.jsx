@@ -26,6 +26,28 @@ export default function TryOn() {
   const [modeLoading, setModeLoading] = useState(false);
   const [faceMeshReady, setFaceMeshReady] = useState(false);
 
+  const debugSpheresRef = useRef({
+    leftEye: null,
+    rightEye: null,
+    eyeCenter: null,
+  });
+
+  const createOrUpdateSphere = (refKey, position, color = 0xff0000) => {
+    const existing = debugSpheresRef.current[refKey];
+    if (existing) {
+      existing.position.set(position.x, position.y, position.z);
+      return;
+    }
+0
+    const geometry = new THREE.SphereGeometry(0.05, 8, 8);
+    const material = new THREE.MeshBasicMaterial({ color });
+    const sphere = new THREE.Mesh(geometry, material);
+    sphere.position.set(position.x, position.y, position.z);
+    sceneRef.current.add(sphere);
+    debugSpheresRef.current[refKey] = sphere;
+  };
+
+
   const { selectedImage, setSelectedImage } = useSelectedGlasses();
   const allOptions = [{ label: 'Glasses 1', value: '/oculos.obj'                     
    }];
@@ -33,8 +55,9 @@ export default function TryOn() {
   // Initialization
   useEffect(() => {
     let isMounted = true;
-
+    if (!threeCanvasRef.current) return;
     const init = async () => {
+      setModeLoading(true);
       if (!threeCanvasRef.current) {
         setTimeout(init, 100);
         return;
@@ -43,7 +66,7 @@ export default function TryOn() {
       setModeLoading(true);
       console.log("Initializing FaceMesh and Three.js...");
 
-      // FaceMesh 
+      // FaceMesh
       const faceMesh = new mpFaceMesh.FaceMesh({
         locateFile: (file) => `https://cdn.jsdelivr.net/npm/@mediapipe/face_mesh/${file}`,
       });
@@ -62,35 +85,39 @@ export default function TryOn() {
       faceMeshRef.current = faceMesh;
       setFaceMeshReady(true);
 
-      // Three.js Scene 
+      // Scene
       sceneRef.current = new THREE.Scene();
 
-      const canvasWidth = threeCanvasRef.current.clientWidth;
-      const canvasHeight = threeCanvasRef.current.clientHeight;
+      const canvas = threeCanvasRef.current;
+      const canvasWidth = canvas.clientWidth;
+      const canvasHeight = canvas.clientHeight;
       const aspect = canvasWidth / canvasHeight;
 
-      // PerspectiveCamera for 3D alignment
+      // Camera
       const fov = 45;
       const near = 0.1;
       const far = 1000;
       threeCameraRef.current = new THREE.PerspectiveCamera(fov, aspect, near, far);
-      threeCameraRef.current.position.z = 2.5; 
+      threeCameraRef.current.position.z = 2.5;
 
       // Renderer
       try {
         rendererRef.current = new THREE.WebGLRenderer({
-          canvas: threeCanvasRef.current,
+          canvas: canvas,
           alpha: true,
           antialias: true,
         });
-        rendererRef.current.setSize(canvasWidth, canvasHeight);
+        rendererRef.current.setSize(canvasWidth, canvasHeight, false);
         rendererRef.current.setPixelRatio(window.devicePixelRatio);
-        rendererRef.current.setClearColor(0x000000, 0); // Transparent background
+        rendererRef.current.setClearColor(0x000000, 0);
       } catch (err) {
         console.error("Renderer initialization failed:", err);
         setModeLoading(false);
         return;
       }
+
+      threeCameraRef.current.aspect = canvasWidth / canvasHeight;
+      threeCameraRef.current.updateProjectionMatrix();
 
       // Lighting
       sceneRef.current.add(new THREE.AmbientLight(0xffffff, 0.8));
@@ -98,21 +125,22 @@ export default function TryOn() {
       directionalLight.position.set(0, 1, 1);
       sceneRef.current.add(directionalLight);
 
-      //  Load Glasses Models 
+      // Load Models
       const loader = new OBJLoader();
-
       const loadModel = (path) =>
         new Promise((resolve, reject) => {
           loader.load(
             path,
             (obj) => {
-              console.log(`Glasses model loaded: ${path}`);
-
-              // Center model
               const box = new THREE.Box3().setFromObject(obj);
               const center = box.getCenter(new THREE.Vector3());
               obj.position.sub(center);
 
+              // Raise it by a fraction of model height
+              const size = box.getSize(new THREE.Vector3());
+              obj.position.y += size.y * 0.5;  // Lifts it up by half its height
+
+              resolve(obj);
               obj.visible = false;
 
               obj.traverse((child) => {
@@ -156,7 +184,6 @@ export default function TryOn() {
 
     const timer = setTimeout(init, 100);
 
-    // -------------------- Cleanup --------------------
     return () => {
       isMounted = false;
       clearTimeout(timer);
@@ -164,7 +191,7 @@ export default function TryOn() {
       faceMeshRef.current?.close();
       faceMeshRef.current = null;
 
-      cameraRef.current?.stop();
+      cameraRef.current?.stop?.();
       cameraRef.current = null;
 
       if (rendererRef.current) {
@@ -175,12 +202,12 @@ export default function TryOn() {
 
       if (sceneRef.current) {
         sceneRef.current.traverse((object) => {
-          if (object.geometry) object.geometry.dispose();
-          if (object.material) {
+          if (object.isMesh) {
+            object.geometry?.dispose();
             if (Array.isArray(object.material)) {
               object.material.forEach((m) => m.dispose());
             } else {
-              object.material.dispose();
+              object.material?.dispose();
             }
           }
         });
@@ -191,7 +218,39 @@ export default function TryOn() {
       cancelAnimationFrame(animationFrameId.current);
     };
   }, []);
+  // Resizes both canvases to match the container size.
+  useEffect(() => {
+  const canvas = threeCanvasRef.current;
+  const renderer = rendererRef.current;
+  const camera = threeCameraRef.current;
 
+  const container = canvas?.parentElement;
+  if (!container || !canvas || !renderer || !camera) return;
+
+  const resize = () => {
+    const width = container.clientWidth;
+    const height = container.clientHeight;
+
+    // Update canvas size (for styling)
+    canvas.width = width;
+    canvas.height = height;
+    canvas.style.width = "100%";
+    canvas.style.height = "100%";
+
+    // Resize Three.js renderer and update camera
+    renderer.setSize(width, height, false);
+    renderer.setPixelRatio(window.devicePixelRatio);
+
+    camera.aspect = width / height;
+    camera.updateProjectionMatrix();
+  };
+
+  const observer = new ResizeObserver(resize);
+  observer.observe(container);
+  resize(); // Initial call
+
+  return () => observer.disconnect();
+}, []);
 
   // Webcam Handling 
   useEffect(() => {
@@ -209,7 +268,6 @@ export default function TryOn() {
       stopWebcam();
     }
   }, [useWebcam]);
-
   const startWebcam = async () => {
     try {
       console.log("Starting webcam...");
@@ -259,7 +317,6 @@ export default function TryOn() {
       throw e;
     }
   };
-
   const stopWebcam = () => {
     console.log("Stopping webcam...");
     if (videoRef.current?.srcObject) {
@@ -282,7 +339,6 @@ export default function TryOn() {
       }
     }
   }, [useWebcam, imageURL]);
-
   const handleFile = (e) => {
     const f = e.target.files?.[0];
     if (f) {
@@ -296,7 +352,6 @@ export default function TryOn() {
       r.readAsDataURL(f);
     }
   };
-
   const processUploadedImage = async () => {
     if (!imageRef.current || !rendererRef.current || !threeCameraRef.current) return;
 
@@ -358,9 +413,10 @@ export default function TryOn() {
 
   // Main Animation Loop 
   useEffect(() => {
-    if (!faceMeshReady || modeLoading) return;
-
-    const animationLoop = async () => {
+    console.log("SOMETGING");
+    
+  if (!faceMeshReady || modeLoading || !threeCanvasRef.current) return;
+  const animationLoop = async () => {
       await detectAndCacheFaces();
       drawLoop3D();
       animationFrameId.current = requestAnimationFrame(animationLoop);
@@ -384,83 +440,90 @@ export default function TryOn() {
 
   // Draw Loop
   const drawLoop3D = () => {
-  const glassesModel = cachedModels.current[selectedImage || allOptions[0].value];
+  const modelKey = selectedImage || allOptions[0]?.value;
+  const glassesModel = cachedModels.current[modelKey];
   const landmarks = faceCache.current[0]?.landmarks || [];
 
-  if (landmarks.length > 0) {
-    glassesModel.visible = true;
+  if (!glassesModel || landmarks.length === 0 || !threeCanvasRef.current) return;
 
-    // Key landmarks
-    const leftEyeInner  = landmarks[133];
-    const rightEyeInner = landmarks[362];
-    const leftEyeOuter  = landmarks[143];
-    const rightEyeOuter = landmarks[372];
-    const forehead      = landmarks[168];
-    const chinTip       = landmarks[175];
+  const canvas = threeCanvasRef.current;
+  const canvasWidth = canvas.width;
+  const canvasHeight = canvas.height;
+  const aspect = canvasWidth / canvasHeight;
+  const frustumSize = 1.6;
 
-    // Canvas dimensions required for conversion of coords
-    const canvasWidth  = threeCanvasRef.current.width;
-    const canvasHeight = threeCanvasRef.current.height;
-    const aspect       = canvasWidth / canvasHeight;
-    const frustumSize  = 1.6;
+  glassesModel.visible = true;
 
-    // Map FaceMesh normalized coords to Three.js coords
-    const convertCoords = (lm) => {
-      const x = (lm.x - 0.5) * aspect * frustumSize;
-      const y = (0.5 - lm.y) * frustumSize;
-      const z = lm.z * -10;
-      return { x, y, z };
-    };
+  // Landmark aliases
+  const get = (i) => landmarks[i];
+  const leftEyeInner = get(133);
+  const rightEyeInner = get(362);
+  const leftEyeOuter = get(143);
+  const rightEyeOuter = get(372);
+  const leftEye = get(33);
+  const rightEye = get(263);
+  const forehead = get(10);
+  const chinTip = get(152);
+  // const eyeCenter= get(168);
 
-    //Position 
-    const leftPos  = convertCoords(leftEyeInner);
-    const rightPos = convertCoords(rightEyeInner);
-    const eyeCenter = {
-      x: (leftPos.x + rightPos.x) / 2,
-      y: (leftPos.y + rightPos.y) / 2,
-      z: (leftPos.z + rightPos.z) / 2,
-    };
-    glassesModel.position.set(eyeCenter.x, eyeCenter.y, eyeCenter.z);
+  // Coordinate converter
+  const convertCoords = (lm) => ({
+    x: (lm.x - 0.5) * aspect * frustumSize,
+    y: (0.5 - lm.y) * frustumSize,
+    z: lm.z * -10,
+  });
+
+  const leftPos = convertCoords(leftEyeInner);
+  const rightPos = convertCoords(rightEyeInner);
+  const foreheadPos = convertCoords(forehead);
+  const chinPos = convertCoords(chinTip);
+  const leftOuterPos = convertCoords(leftEyeOuter);
+  const rightOuterPos = convertCoords(rightEyeOuter);
+
+  const eyeCenter = {
+    x: (leftEyeInner.x + rightEyeInner.x) / 2,
+    y: ((leftEyeInner.y + rightEyeInner.y) / 2 + forehead.y) / 2,
+    z: (leftEyeInner.z + rightEyeInner.z) / 2,
+  };
+  glassesModel.position.set(eyeCenter.x, eyeCenter.y, eyeCenter.z);
+
+  const eyeDist = Math.hypot(rightPos.x - leftPos.x, rightPos.y - leftPos.y);
+  const baseEyeDistance = 0.3;
+  const scaleMultiplier = 1.2;
+  const scale = (eyeDist / baseEyeDistance) * scaleMultiplier;
+  glassesModel.scale.set(scale, scale, scale);
+
+  const roll = Math.atan2(rightPos.y - leftPos.y, rightPos.x - leftPos.x);
+  const pitch = Math.atan2(chinPos.y - foreheadPos.y, Math.abs(chinPos.z - foreheadPos.z)) * 0.2;
+  const yaw = (Math.abs(rightOuterPos.z) - Math.abs(leftOuterPos.z)) * 0.2;
+
+  // createOrUpdateSphere("leftEye", leftPos, 0x00ff00);   // Green
+  // createOrUpdateSphere("rightEye", rightPos, 0x0000ff); // Blue
+  createOrUpdateSphere("eyeCenter", eyeCenter, 0xff0000); // Red
+  createOrUpdateSphere("eyeCenter1", leftEyeInner, 0xff0000); // Red
+  createOrUpdateSphere("eyeCenter2", rightEyeInner, 0xff0000); // Red
+  createOrUpdateSphere("eyeCenter3", leftEyeOuter, 0xff0000); // Red
+  createOrUpdateSphere("eyeCenter4", rightEyeOuter, 0xff0000); // Red
+  createOrUpdateSphere("eyeCenter5", rightEye, 0xff0000); // Red
+  createOrUpdateSphere("eyeCenter6", forehead, 0xff0000); // Red
+  createOrUpdateSphere("eyeCenter7", chinTip, 0xff0000); // Red
 
 
-    //Scale based on inter-eye distance
-    const eyeDist = Math.hypot(
-      rightPos.x - leftPos.x,
-      rightPos.y - leftPos.y
-    );
-    const baseEyeDistance = 0.3;  
-    const scaleMultiplier = 1.2;
-    const s = (eyeDist / baseEyeDistance) * scaleMultiplier;
-    glassesModel.scale.set(s, s, s);
+  glassesModel.rotation.set(pitch, yaw, roll);
 
-
-    // Rotation to match head tilt 
-    const rollAngle = Math.atan2(
-      rightPos.y - leftPos.y,
-      rightPos.x - leftPos.x
-    );
-
-    const foreheadPos = convertCoords(forehead);
-    const chinPos     = convertCoords(chinTip);
-    const pitchAngle = Math.atan2(
-      chinPos.y - foreheadPos.y,
-      Math.abs(chinPos.z - foreheadPos.z)
-    ) * 0.3;
-
-    const leftOuter  = convertCoords(leftEyeOuter);
-    const rightOuter = convertCoords(rightEyeOuter);
-    const yawAngle = (Math.abs(rightOuter.z) - Math.abs(leftOuter.z)) * 0.5;
-
-    glassesModel.rotation.set(pitchAngle, yawAngle, rollAngle);
-    
-    rendererRef.current.render(sceneRef.current, threeCameraRef.current);
-  }
+  rendererRef.current.render(sceneRef.current, threeCameraRef.current);
 };
+
+
 
   // JSX 
   return (
     <div className="relative min-h-screen overflow-hidden">
-      <img src="/background.png" alt="Background" className="absolute inset-0 w-full h-full object-cover -z-20" />
+      <img
+        src="/background.png"
+        alt="Background"
+        className="absolute inset-0 w-full h-full object-cover -z-20"
+      />
       <div className="absolute inset-0 bg-white/60 backdrop-blur-md -z-10" />
 
       <div className="relative z-10 flex flex-col items-center py-10 px-4">
@@ -469,17 +532,24 @@ export default function TryOn() {
         <div className="flex flex-wrap gap-4 justify-center mb-6">
           <button
             onClick={() => setUseWebcam(true)}
-            className={`px-5 py-2 rounded-lg text-white shadow ${useWebcam ? 'bg-blue-400' : 'bg-blue-600 hover:bg-blue-700'}`}
+            className={`px-5 py-2 rounded-lg text-white shadow ${
+              useWebcam ? 'bg-blue-400' : 'bg-blue-600 hover:bg-blue-700'
+            }`}
+            aria-label="Use webcam for try-on"
           >
             Use Webcam
           </button>
-          <label className="cursor-pointer bg-white border px-5 py-2 rounded-lg shadow">
+          <label
+            className="cursor-pointer bg-white border px-5 py-2 rounded-lg shadow"
+            aria-label="Upload an image for try-on"
+          >
             Upload Image
             <input type="file" accept="image/*" onChange={handleFile} className="hidden" />
           </label>
           <button
             onClick={snapshot}
             className="bg-green-600 hover:bg-green-700 text-white px-5 py-2 rounded-lg shadow"
+            aria-label="Save snapshot of try-on"
           >
             Save Snapshot
           </button>
@@ -487,14 +557,20 @@ export default function TryOn() {
 
         <div className="flex flex-wrap justify-center gap-6 mb-6">
           <div className="text-center">
-            <label className="block mb-1 font-medium">Select Glasses:</label>
+            <label htmlFor="glasses-select" className="block mb-1 font-medium">
+              Select Glasses:
+            </label>
             <select
-              value={selectedImage || '/oculos.obj'}
+              id="glasses-select"
+              value={selectedImage}
               onChange={(e) => setSelectedImage(e.target.value)}
               className="px-4 py-2 border rounded-md shadow"
+              aria-label="Select glasses model"
             >
               {allOptions.map((o) => (
-                <option key={o.value} value={o.value}>{o.label}</option>
+                <option key={o.value} value={o.value}>
+                  {o.label}
+                </option>
               ))}
             </select>
           </div>
@@ -507,21 +583,26 @@ export default function TryOn() {
               autoPlay
               muted
               playsInline
-              className={`w-full h-full object-cover transition-opacity duration-300 ${useWebcam ? 'scale-x-[-1]' : ''} ${modeLoading ? 'opacity-0' : 'opacity-100'}`}
+              className={`w-full h-full object-contain transition-opacity duration-300 ${
+                useWebcam ? 'scale-x-[-1]' : ''
+              } ${modeLoading ? 'opacity-0' : 'opacity-100'}`}
             />
           ) : (
-            <img ref={imageRef} src={imageURL} alt="Uploaded" className="w-full h-full object-cover" />
+            <img
+              ref={imageRef}
+              src={imageURL}
+              alt="Uploaded try-on image"
+              className="w-full h-full object-contain"
+            />
           )}
           <canvas
-              ref={canvasRef}
-              className={`absolute inset-0 w-full h-full object-cover pointer-events-none ${useWebcam ? 'scale-x-[-1]' : ''}`}
-            />
-
-            {/* 3D Canvas */}
-            <canvas
-              ref={threeCanvasRef}
-              className={`absolute inset-0 w-full h-full object-cover pointer-events-none ${useWebcam ? 'scale-x-[-1]' : ''}`}
-            />
+            ref={canvasRef}
+            className={`absolute inset-0 pointer-events-none ${useWebcam ? 'scale-x-[-1]' : ''}`}
+          />
+          <canvas
+            ref={threeCanvasRef}
+            className={`absolute inset-0 pointer-events-none ${useWebcam ? 'scale-x-[-1]' : ''}`}
+          />
           {modeLoading && (
             <div className="absolute inset-0 flex items-center justify-center bg-white/70 z-40">
               <div className="w-10 h-10 border-4 border-blue-500 border-t-transparent rounded-full animate-spin" />
