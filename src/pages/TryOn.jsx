@@ -34,16 +34,8 @@ export default function TryOn() {
   useEffect(() => {
     let isMounted = true;
     if (!threeCanvasRef.current) return;
+
     const init = async () => {
-      setModeLoading(true);
-      if (!threeCanvasRef.current) {
-        setTimeout(init, 100);
-        return;
-      }
-
-      setModeLoading(true);
-      console.log("Initializing FaceMesh and Three.js...");
-
       // FaceMesh
       const faceMesh = new mpFaceMesh.FaceMesh({
         locateFile: (file) => `https://cdn.jsdelivr.net/npm/@mediapipe/face_mesh/${file}`,
@@ -103,7 +95,7 @@ export default function TryOn() {
       directionalLight.position.set(0, 1, 1);
       sceneRef.current.add(directionalLight);
 
-      // Load Models
+      // Load Models/obj
       const loader = new OBJLoader();
       const loadModel = (path) =>
         new Promise((resolve, reject) => {
@@ -198,40 +190,41 @@ export default function TryOn() {
   }, []);
   
   // Resizes both canvases to match the container size.
-//   useEffect(() => {
-//   const canvas = threeCanvasRef.current;
-//   const renderer = rendererRef.current;
-//   const camera = threeCameraRef.current;
+  //   useEffect(() => {
+  //   const canvas = threeCanvasRef.current;
+  //   const renderer = rendererRef.current;
+  //   const camera = threeCameraRef.current;
 
-//   const container = canvas?.parentElement;
-//   if (!container || !canvas || !renderer || !camera) return;
+  //   const container = canvas?.parentElement;
+  //   if (!container || !canvas || !renderer || !camera) return;
 
-//   const resize = () => {
-//     const width = container.clientWidth;
-//     const height = container.clientHeight;
+  //   const resize = () => {
+  //     const width = container.clientWidth;
+  //     const height = container.clientHeight;
 
-//     // Update canvas size (for styling)
-//     canvas.width = width;
-//     canvas.height = height;
-//     canvas.style.width = "100%";
-//     canvas.style.height = "100%";
+  //     // Update canvas size (for styling)
+  //     canvas.width = width;
+  //     canvas.height = height;
+  //     canvas.style.width = "100%";
+  //     canvas.style.height = "100%";
 
-//     // Resize Three.js renderer and update camera
-//     renderer.setSize(width, height, false);
-//     renderer.setPixelRatio(window.devicePixelRatio);
+  //     // Resize Three.js renderer and update camera
+  //     renderer.setSize(width, height, false);
+  //     renderer.setPixelRatio(window.devicePixelRatio);
 
-//     camera.aspect = width / height;
-//     camera.updateProjectionMatrix();
-//   };
+  //     camera.aspect = width / height;
+  //     camera.updateProjectionMatrix();
+  //   };
 
-//   const observer = new ResizeObserver(resize);
-//   observer.observe(container);
-//   resize(); // Initial call
+  //   const observer = new ResizeObserver(resize);
+  //   observer.observe(container);
+  //   resize(); // Initial call
 
-//   return () => observer.disconnect();
-// }, []);
+  //   return () => observer.disconnect();
+  // }, []);
 
   // Webcam Handling 
+  
   useEffect(() => {
     if (useWebcam) {
       setModeLoading(true);
@@ -454,16 +447,16 @@ export default function TryOn() {
 
     const convertCoords = (lm, videoWidth, videoHeight) => {
   // Normalized device coordinates [-1, 1]
-  const ndcX = (lm.x - 0.5) * 2;
-  const ndcY = (0.5 - lm.y) * 2; // y is flipped
-  const ndcZ = lm.z ; // Adjust depth scale if needed
+      const ndcX = (lm.x - 0.5) * 2;
+      const ndcY = (0.5 - lm.y) * 2; // y is flipped
+      const ndcZ = lm.z ; // Adjust depth scale if needed
 
-  // Convert to 3D world space using unprojection
-  const vec = new THREE.Vector3(ndcX, ndcY, ndcZ);
-  vec.unproject(threeCameraRef.current); // Converts from NDC to world coordinates
+      // Convert to 3D world space using unprojection
+      const vec = new THREE.Vector3(ndcX, ndcY, ndcZ);
+      vec.unproject(threeCameraRef.current); // Converts from NDC to world coordinates
 
-  return vec;
-};
+      return vec;
+    };
 
 
     // === GLASSES SETUP ===
