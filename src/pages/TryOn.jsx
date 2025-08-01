@@ -25,15 +25,20 @@ export default function TryOn() {
   const [useWebcam, setUseWebcam] = useState(true);
   const [modeLoading, setModeLoading] = useState(false);
   const [faceMeshReady, setFaceMeshReady] = useState(false);
+  
+  // Fixed values from the fine-tuning controls
+  const positionOffset = { x: -0.270, y: 0.000, z: 0.000 };
+  const scaleMultiplier = -2.00;
+  const rotationOffset = { x: 0.0192, y: 0.000, z: 0.000 }; // 1.1° converted to radians
 
   const { selectedImage, setSelectedImage } = useSelectedGlasses();
-  const allOptions = [{ label: 'Glasses 1', value: '/oculos.obj'                     
-   }];
+  const allOptions = [{ label: 'Glasses 1', value: '/oculos.obj' }];
 
   // Initialization
   useEffect(() => {
     let isMounted = true;
-
+    if (!threeCanvasRef.current) return;
+    
     const init = async () => {
       if (!threeCanvasRef.current) {
         setTimeout(init, 100);
@@ -43,7 +48,7 @@ export default function TryOn() {
       setModeLoading(true);
       console.log("Initializing FaceMesh and Three.js...");
 
-      // FaceMesh 
+      // FaceMesh
       const faceMesh = new mpFaceMesh.FaceMesh({
         locateFile: (file) => `https://cdn.jsdelivr.net/npm/@mediapipe/face_mesh/${file}`,
       });
@@ -62,30 +67,36 @@ export default function TryOn() {
       faceMeshRef.current = faceMesh;
       setFaceMeshReady(true);
 
-      // Three.js Scene 
+      // Scene
       sceneRef.current = new THREE.Scene();
 
-      const canvasWidth = threeCanvasRef.current.clientWidth;
-      const canvasHeight = threeCanvasRef.current.clientHeight;
+      const canvas = threeCanvasRef.current;
+      const canvasWidth = canvas.clientWidth;
+      const canvasHeight = canvas.clientHeight;
       const aspect = canvasWidth / canvasHeight;
 
-      // PerspectiveCamera for 3D alignment
-      const fov = 45;
-      const near = 0.1;
-      const far = 1000;
-      threeCameraRef.current = new THREE.PerspectiveCamera(fov, aspect, near, far);
-      threeCameraRef.current.position.z = 2.5; 
+      // Use Orthographic Camera for better face alignment
+      const frustumSize = 2;
+      threeCameraRef.current = new THREE.OrthographicCamera(
+        -frustumSize * aspect / 2, // left
+        frustumSize * aspect / 2,  // right
+        frustumSize / 2,           // top
+        -frustumSize / 2,          // bottom
+        0.1,                       // near
+        1000                       // far
+      );
+      threeCameraRef.current.position.z = 5;
 
       // Renderer
       try {
         rendererRef.current = new THREE.WebGLRenderer({
-          canvas: threeCanvasRef.current,
+          canvas: canvas,
           alpha: true,
           antialias: true,
         });
-        rendererRef.current.setSize(canvasWidth, canvasHeight);
+        rendererRef.current.setSize(canvasWidth, canvasHeight, false);
         rendererRef.current.setPixelRatio(window.devicePixelRatio);
-        rendererRef.current.setClearColor(0x000000, 0); // Transparent background
+        rendererRef.current.setClearColor(0x000000, 0);
       } catch (err) {
         console.error("Renderer initialization failed:", err);
         setModeLoading(false);
@@ -98,17 +109,14 @@ export default function TryOn() {
       directionalLight.position.set(0, 1, 1);
       sceneRef.current.add(directionalLight);
 
-      //  Load Glasses Models 
+      // Load Models
       const loader = new OBJLoader();
-
       const loadModel = (path) =>
         new Promise((resolve, reject) => {
           loader.load(
             path,
             (obj) => {
-              console.log(`Glasses model loaded: ${path}`);
-
-              // Center model
+              // Center the model but don't raise it - we'll position it correctly at runtime
               const box = new THREE.Box3().setFromObject(obj);
               const center = box.getCenter(new THREE.Vector3());
               obj.position.sub(center);
@@ -131,7 +139,7 @@ export default function TryOn() {
 
               cachedModels.current[path] = obj;
               sceneRef.current.add(obj);
-              resolve();
+              resolve(obj);
             },
             undefined,
             (error) => {
@@ -156,7 +164,6 @@ export default function TryOn() {
 
     const timer = setTimeout(init, 100);
 
-    // -------------------- Cleanup --------------------
     return () => {
       isMounted = false;
       clearTimeout(timer);
@@ -164,7 +171,7 @@ export default function TryOn() {
       faceMeshRef.current?.close();
       faceMeshRef.current = null;
 
-      cameraRef.current?.stop();
+      cameraRef.current?.stop?.();
       cameraRef.current = null;
 
       if (rendererRef.current) {
@@ -175,12 +182,12 @@ export default function TryOn() {
 
       if (sceneRef.current) {
         sceneRef.current.traverse((object) => {
-          if (object.geometry) object.geometry.dispose();
-          if (object.material) {
+          if (object.isMesh) {
+            object.geometry?.dispose();
             if (Array.isArray(object.material)) {
               object.material.forEach((m) => m.dispose());
             } else {
-              object.material.dispose();
+              object.material?.dispose();
             }
           }
         });
@@ -192,6 +199,45 @@ export default function TryOn() {
     };
   }, []);
 
+  // Resizes both canvases to match the container size.
+  useEffect(() => {
+    const canvas = threeCanvasRef.current;
+    const renderer = rendererRef.current;
+    const camera = threeCameraRef.current;
+
+    const container = canvas?.parentElement;
+    if (!container || !canvas || !renderer || !camera) return;
+
+    const resize = () => {
+      const width = container.clientWidth;
+      const height = container.clientHeight;
+      const aspect = width / height;
+
+      // Update canvas size
+      canvas.width = width;
+      canvas.height = height;
+      canvas.style.width = "100%";
+      canvas.style.height = "100%";
+
+      // Resize Three.js renderer and update camera
+      renderer.setSize(width, height, false);
+      renderer.setPixelRatio(window.devicePixelRatio);
+
+      // Update orthographic camera
+      const frustumSize = 2;
+      camera.left = -frustumSize * aspect / 2;
+      camera.right = frustumSize * aspect / 2;
+      camera.top = frustumSize / 2;
+      camera.bottom = -frustumSize / 2;
+      camera.updateProjectionMatrix();
+    };
+
+    const observer = new ResizeObserver(resize);
+    observer.observe(container);
+    resize(); // Initial call
+
+    return () => observer.disconnect();
+  }, []);
 
   // Webcam Handling 
   useEffect(() => {
@@ -234,7 +280,7 @@ export default function TryOn() {
           
           rendererRef.current.setSize(videoWidth, videoHeight);
           
-          // Update camera aspect for orthographic camera
+          // Update camera aspect
           const aspect = videoWidth / videoHeight;
           const frustumSize = 2;
           threeCameraRef.current.left = -frustumSize * aspect / 2;
@@ -321,8 +367,6 @@ export default function TryOn() {
     threeCameraRef.current.right = frustumSize * aspect / 2;
     threeCameraRef.current.top = frustumSize / 2;
     threeCameraRef.current.bottom = -frustumSize / 2;
-    threeCameraRef.current.scale.x = -1; 
-
     threeCameraRef.current.updateProjectionMatrix();
 
     if (faceMeshReady && faceMeshRef.current && imageRef.current) {
@@ -358,8 +402,8 @@ export default function TryOn() {
 
   // Main Animation Loop 
   useEffect(() => {
-    if (!faceMeshReady || modeLoading) return;
-
+    if (!faceMeshReady || modeLoading || !threeCanvasRef.current) return;
+    
     const animationLoop = async () => {
       await detectAndCacheFaces();
       drawLoop3D();
@@ -382,85 +426,103 @@ export default function TryOn() {
     }
   };
 
-  // Draw Loop
-  const drawLoop3D = () => {
-  const glassesModel = cachedModels.current[selectedImage || allOptions[0].value];
-  const landmarks = faceCache.current[0]?.landmarks || [];
+  // Coordinate conversion function
+  const convertToWorldCoords = (landmark, aspect, frustumSize = 2) => {
+    return {
+      x: (landmark.x - 0.5) * aspect * frustumSize,
+      y: (0.5 - landmark.y) * frustumSize,
+      z: landmark.z * -1, // Adjusted Z depth
+    };
+  };
 
-  if (landmarks.length > 0) {
+  // Draw Loop with fixed values applied
+  const drawLoop3D = () => {
+    const modelKey = selectedImage || allOptions[0]?.value;
+    const glassesModel = cachedModels.current[modelKey];
+    const landmarks = faceCache.current[0]?.landmarks || [];
+
+    if (!glassesModel || landmarks.length === 0 || !threeCanvasRef.current) {
+      return;
+    }
+
+    const canvas = threeCanvasRef.current;
+    const canvasWidth = canvas.width;
+    const canvasHeight = canvas.height;
+    const aspect = canvasWidth / canvasHeight;
+    const frustumSize = 2;
+
     glassesModel.visible = true;
 
-    // Key landmarks
-    const leftEyeInner  = landmarks[133];
-    const rightEyeInner = landmarks[362];
-    const leftEyeOuter  = landmarks[143];
-    const rightEyeOuter = landmarks[372];
-    const forehead      = landmarks[168];
-    const chinTip       = landmarks[175];
+    // Get landmark points
+    const leftEyeInner = landmarks[133];   // Inner corner of left eye
+    const rightEyeInner = landmarks[362];  // Inner corner of right eye
+    const leftEyeOuter = landmarks[143];   // Outer corner of left eye
+    const rightEyeOuter = landmarks[372];  // Outer corner of right eye
+    const noseBridge = landmarks[168];     // Nose bridge (between eyes)
+    const forehead = landmarks[10];        // Forehead center
+    const chinTip = landmarks[152];        // Chin tip
+    const leftEyeCenter = landmarks[33];   // Left eye center
+    const rightEyeCenter = landmarks[263]; // Right eye center
 
-    // Canvas dimensions required for conversion of coords
-    const canvasWidth  = threeCanvasRef.current.width;
-    const canvasHeight = threeCanvasRef.current.height;
-    const aspect       = canvasWidth / canvasHeight;
-    const frustumSize  = 1.6;
+    // Convert to world coordinates
+    const leftEyeInnerPos = convertToWorldCoords(leftEyeInner, aspect, frustumSize);
+    const rightEyeInnerPos = convertToWorldCoords(rightEyeInner, aspect, frustumSize);
+    const leftEyeOuterPos = convertToWorldCoords(leftEyeOuter, aspect, frustumSize);
+    const rightEyeOuterPos = convertToWorldCoords(rightEyeOuter, aspect, frustumSize);
+    const noseBridgePos = convertToWorldCoords(noseBridge, aspect, frustumSize);
+    const foreheadPos = convertToWorldCoords(forehead, aspect, frustumSize);
+    const chinPos = convertToWorldCoords(chinTip, aspect, frustumSize);
+    const leftEyeCenterPos = convertToWorldCoords(leftEyeCenter, aspect, frustumSize);
+    const rightEyeCenterPos = convertToWorldCoords(rightEyeCenter, aspect, frustumSize);
 
-    // Map FaceMesh normalized coords to Three.js coords
-    const convertCoords = (lm) => {
-      const x = (lm.x - 0.5) * aspect * frustumSize;
-      const y = (0.5 - lm.y) * frustumSize;
-      const z = lm.z * -10;
-      return { x, y, z };
-    };
-
-    //Position 
-    const leftPos  = convertCoords(leftEyeInner);
-    const rightPos = convertCoords(rightEyeInner);
+    // Calculate proper eye center using eye centers, not inner corners
     const eyeCenter = {
-      x: (leftPos.x + rightPos.x) / 2,
-      y: (leftPos.y + rightPos.y) / 2,
-      z: (leftPos.z + rightPos.z) / 2,
+      x: (leftEyeCenterPos.x + rightEyeCenterPos.x) / 2 + positionOffset.x,
+      y: (leftEyeCenterPos.y + rightEyeCenterPos.y) / 2 + 0.08 + positionOffset.y, // Move up to sit on nose bridge
+      z: (leftEyeCenterPos.z + rightEyeCenterPos.z) / 2 + 0.02 + positionOffset.z, // Move slightly forward
     };
-    glassesModel.position.set(eyeCenter.x, eyeCenter.y, eyeCenter.z);
 
+    // Position glasses at calculated eye center
+    glassesModel.position.copy(eyeCenter);
 
-    //Scale based on inter-eye distance
-    const eyeDist = Math.hypot(
-      rightPos.x - leftPos.x,
-      rightPos.y - leftPos.y
+    // Calculate scale based on eye distance (outer corners for frame width)
+    const eyeDistance = Math.sqrt(
+      Math.pow(rightEyeOuterPos.x - leftEyeOuterPos.x, 2) +
+      Math.pow(rightEyeOuterPos.y - leftEyeOuterPos.y, 2)
     );
-    const baseEyeDistance = 0.3;  
-    const scaleMultiplier = 1.2;
-    const s = (eyeDist / baseEyeDistance) * scaleMultiplier;
-    glassesModel.scale.set(s, s, s);
+    const baseEyeDistance = 0.6; // Baseline distance for glasses frame
+    const scale = Math.max(0.5, Math.min(2.0, eyeDistance / baseEyeDistance * scaleMultiplier)); // Constrain scale
+    glassesModel.scale.set(scale, scale, scale);
 
+    // Calculate rotations with better accuracy
+    const roll = Math.atan2(
+      rightEyeCenterPos.y - leftEyeCenterPos.y,
+      rightEyeCenterPos.x - leftEyeCenterPos.x
+    ) + rotationOffset.z;
 
-    // Rotation to match head tilt 
-    const rollAngle = Math.atan2(
-      rightPos.y - leftPos.y,
-      rightPos.x - leftPos.x
-    );
+    // Pitch calculation using nose bridge to forehead/chin
+    const faceHeight = Math.abs(foreheadPos.y - chinPos.y);
+    const pitch = Math.atan2(
+      noseBridgePos.z - eyeCenter.z,
+      faceHeight
+    ) * 0.2 + rotationOffset.x; // Reduced influence
 
-    const foreheadPos = convertCoords(forehead);
-    const chinPos     = convertCoords(chinTip);
-    const pitchAngle = Math.atan2(
-      chinPos.y - foreheadPos.y,
-      Math.abs(chinPos.z - foreheadPos.z)
-    ) * 0.3;
+    // Yaw calculation based on face turning
+    const yaw = (rightEyeCenterPos.z - leftEyeCenterPos.z) * 0.3 + rotationOffset.y;
 
-    const leftOuter  = convertCoords(leftEyeOuter);
-    const rightOuter = convertCoords(rightEyeOuter);
-    const yawAngle = (Math.abs(rightOuter.z) - Math.abs(leftOuter.z)) * 0.5;
+    glassesModel.rotation.set(pitch, yaw, roll);
 
-    glassesModel.rotation.set(pitchAngle, yawAngle, rollAngle);
-    
     rendererRef.current.render(sceneRef.current, threeCameraRef.current);
-  }
-};
+  };
 
   // JSX 
   return (
     <div className="relative min-h-screen overflow-hidden">
-      <img src="/background.png" alt="Background" className="absolute inset-0 w-full h-full object-cover -z-20" />
+      <img
+        src="/background.png"
+        alt="Background"
+        className="absolute inset-0 w-full h-full object-cover -z-20"
+      />
       <div className="absolute inset-0 bg-white/60 backdrop-blur-md -z-10" />
 
       <div className="relative z-10 flex flex-col items-center py-10 px-4">
@@ -469,17 +531,24 @@ export default function TryOn() {
         <div className="flex flex-wrap gap-4 justify-center mb-6">
           <button
             onClick={() => setUseWebcam(true)}
-            className={`px-5 py-2 rounded-lg text-white shadow ${useWebcam ? 'bg-blue-400' : 'bg-blue-600 hover:bg-blue-700'}`}
+            className={`px-5 py-2 rounded-lg text-white shadow ${
+              useWebcam ? 'bg-blue-400' : 'bg-blue-600 hover:bg-blue-700'
+            }`}
+            aria-label="Use webcam for try-on"
           >
             Use Webcam
           </button>
-          <label className="cursor-pointer bg-white border px-5 py-2 rounded-lg shadow">
+          <label
+            className="cursor-pointer bg-white border px-5 py-2 rounded-lg shadow"
+            aria-label="Upload an image for try-on"
+          >
             Upload Image
             <input type="file" accept="image/*" onChange={handleFile} className="hidden" />
           </label>
           <button
             onClick={snapshot}
             className="bg-green-600 hover:bg-green-700 text-white px-5 py-2 rounded-lg shadow"
+            aria-label="Save snapshot of try-on"
           >
             Save Snapshot
           </button>
@@ -487,14 +556,20 @@ export default function TryOn() {
 
         <div className="flex flex-wrap justify-center gap-6 mb-6">
           <div className="text-center">
-            <label className="block mb-1 font-medium">Select Glasses:</label>
+            <label htmlFor="glasses-select" className="block mb-1 font-medium">
+              Select Glasses:
+            </label>
             <select
-              value={selectedImage || '/oculos.obj'}
+              id="glasses-select"
+              value={selectedImage}
               onChange={(e) => setSelectedImage(e.target.value)}
               className="px-4 py-2 border rounded-md shadow"
+              aria-label="Select glasses model"
             >
               {allOptions.map((o) => (
-                <option key={o.value} value={o.value}>{o.label}</option>
+                <option key={o.value} value={o.value}>
+                  {o.label}
+                </option>
               ))}
             </select>
           </div>
@@ -507,21 +582,26 @@ export default function TryOn() {
               autoPlay
               muted
               playsInline
-              className={`w-full h-full object-cover transition-opacity duration-300 ${useWebcam ? 'scale-x-[-1]' : ''} ${modeLoading ? 'opacity-0' : 'opacity-100'}`}
+              className={`w-full h-full object-contain transition-opacity duration-300 ${
+                useWebcam ? 'scale-x-[-1]' : ''
+              } ${modeLoading ? 'opacity-0' : 'opacity-100'}`}
             />
           ) : (
-            <img ref={imageRef} src={imageURL} alt="Uploaded" className="w-full h-full object-cover" />
+            <img
+              ref={imageRef}
+              src={imageURL}
+              alt="Uploaded try-on image"
+              className="w-full h-full object-contain"
+            />
           )}
           <canvas
-              ref={canvasRef}
-              className={`absolute inset-0 w-full h-full object-cover pointer-events-none ${useWebcam ? 'scale-x-[-1]' : ''}`}
-            />
-
-            {/* 3D Canvas */}
-            <canvas
-              ref={threeCanvasRef}
-              className={`absolute inset-0 w-full h-full object-cover pointer-events-none ${useWebcam ? 'scale-x-[-1]' : ''}`}
-            />
+            ref={canvasRef}
+            className={`absolute inset-0 pointer-events-none ${useWebcam ? 'scale-x-[-1]' : ''}`}
+          />
+          <canvas
+            ref={threeCanvasRef}
+            className={`absolute inset-0 pointer-events-none ${useWebcam ? 'scale-x-[-1]' : ''}`}
+          />
           {modeLoading && (
             <div className="absolute inset-0 flex items-center justify-center bg-white/70 z-40">
               <div className="w-10 h-10 border-4 border-blue-500 border-t-transparent rounded-full animate-spin" />
