@@ -25,206 +25,238 @@ export default function TryOn() {
   const [useWebcam, setUseWebcam] = useState(true);
   const [modeLoading, setModeLoading] = useState(false);
   const [faceMeshReady, setFaceMeshReady] = useState(false);
+  const [modelsLoaded, setModelsLoaded] = useState(false);
+
 
   const { selectedImage, setSelectedImage } = useSelectedGlasses();
   const allOptions = [{ label: 'Glasses 1', value: '/oculos.obj'                     
    }];
 
-  // Initialization
-  useEffect(() => {
-    let isMounted = true;
-    if (!threeCanvasRef.current) return;
+useEffect(() => {
+  let isMounted = true;
+  if (!threeCanvasRef.current) return;
 
-    const init = async () => {
-      // FaceMesh
-      const faceMesh = new mpFaceMesh.FaceMesh({
-        locateFile: (file) => `https://cdn.jsdelivr.net/npm/@mediapipe/face_mesh/${file}`,
+  const init = async () => {
+    // === FaceMesh ===
+    const faceMesh = new mpFaceMesh.FaceMesh({
+      locateFile: (file) => `https://cdn.jsdelivr.net/npm/@mediapipe/face_mesh/${file}`,
+    });
+
+    faceMesh.setOptions({
+      maxNumFaces: 1,
+      refineLandmarks: true,
+      minDetectionConfidence: 0.7,
+      minTrackingConfidence: 0.7,
+    });
+
+    faceMesh.onResults((results) => {
+      faceCache.current =
+        results.multiFaceLandmarks?.map((landmarks) => ({ landmarks })) || [];
+    });
+
+    faceMeshRef.current = faceMesh;
+    setFaceMeshReady(true);
+
+    // === Scene Setup ===
+    sceneRef.current = new THREE.Scene();
+
+    const canvas = threeCanvasRef.current;
+    const video = videoRef.current;
+
+    // Wait a bit for DOM layout to finalize
+    await new Promise((res) => setTimeout(res, 100));
+
+    // Use actual visible video size, NOT intrinsic resolution
+    const bounds = video.getBoundingClientRect();
+    const canvasWidth = bounds.width;
+    const canvasHeight = bounds.height;
+    const aspect = canvasWidth / canvasHeight;
+
+    canvas.width = canvasWidth;
+    canvas.height = canvasHeight;
+
+    // === Camera ===
+    const fov = 15;
+    const near = 0.1;
+    const far = 1000;
+    threeCameraRef.current = new THREE.PerspectiveCamera(fov, aspect, near, far);
+    threeCameraRef.current.position.z = 2.5;
+
+    // === Renderer ===
+    try {
+      rendererRef.current = new THREE.WebGLRenderer({
+        canvas: canvas,
+        alpha: true,
+        antialias: true,
       });
+      rendererRef.current.setSize(canvasWidth, canvasHeight, false);
+      rendererRef.current.setPixelRatio(window.devicePixelRatio);
+      rendererRef.current.setClearColor(0x000000, 0);
+    } catch (err) {
+      console.error("Renderer initialization failed:", err);
+      setModeLoading(false);
+      return;
+    }
 
-      faceMesh.setOptions({
-        maxNumFaces: 1,
-        refineLandmarks: true,
-        minDetectionConfidence: 0.7,
-        minTrackingConfidence: 0.7,
-      });
+    threeCameraRef.current.aspect = aspect;
+    threeCameraRef.current.updateProjectionMatrix();
+    rendererRef.current.setSize(canvasWidth, canvasHeight);
 
-      faceMesh.onResults((results) => {
-        faceCache.current = results.multiFaceLandmarks?.map((landmarks) => ({ landmarks })) || [];
-      });
+    // === Lighting ===
+    sceneRef.current.add(new THREE.AmbientLight(0xffffff, 0.8));
+    const directionalLight = new THREE.DirectionalLight(0xffffff, 0.4);
+    directionalLight.position.set(0, 1, 1);
+    sceneRef.current.add(directionalLight);
 
-      faceMeshRef.current = faceMesh;
-      setFaceMeshReady(true);
+    // === Load Glasses Models ===
+    const loader = new OBJLoader();
+    const loadModel = (path) =>
+      new Promise((resolve, reject) => {
+        loader.load(
+          path,
+          (obj) => {
+            const box = new THREE.Box3().setFromObject(obj);
+            const center = box.getCenter(new THREE.Vector3());
+            obj.position.sub(center);
 
-      // Scene
-      sceneRef.current = new THREE.Scene();
+            // Lift model upward slightly
+            const size = box.getSize(new THREE.Vector3());
+            obj.position.y += size.y * 0.5;
 
-      const canvas = threeCanvasRef.current;
-      const canvasWidth = canvas.clientWidth;
-      const canvasHeight = canvas.clientHeight;
-      const aspect = canvasWidth / canvasHeight;
+            obj.visible = false;
 
-      // Camera
-      const fov = 45;
-      const near = 0.1;
-      const far = 1000;
-      threeCameraRef.current = new THREE.PerspectiveCamera(fov, aspect, near, far);
-      threeCameraRef.current.position.z = 2.5;
-
-      // Renderer
-      try {
-        rendererRef.current = new THREE.WebGLRenderer({
-          canvas: canvas,
-          alpha: true,
-          antialias: true,
-        });
-        rendererRef.current.setSize(canvasWidth, canvasHeight, false);
-        rendererRef.current.setPixelRatio(window.devicePixelRatio);
-        rendererRef.current.setClearColor(0x000000, 0);
-      } catch (err) {
-        console.error("Renderer initialization failed:", err);
-        setModeLoading(false);
-        return;
-      }
-
-      threeCameraRef.current.aspect = canvasWidth / canvasHeight;
-      threeCameraRef.current.updateProjectionMatrix();
-
-      // Lighting
-      sceneRef.current.add(new THREE.AmbientLight(0xffffff, 0.8));
-      const directionalLight = new THREE.DirectionalLight(0xffffff, 0.4);
-      directionalLight.position.set(0, 1, 1);
-      sceneRef.current.add(directionalLight);
-
-      // Load Models/obj
-      const loader = new OBJLoader();
-      const loadModel = (path) =>
-        new Promise((resolve, reject) => {
-          loader.load(
-            path,
-            (obj) => {
-              const box = new THREE.Box3().setFromObject(obj);
-              const center = box.getCenter(new THREE.Vector3());
-              obj.position.sub(center);
-
-              // Raise it by a fraction of model height
-              const size = box.getSize(new THREE.Vector3());
-              obj.position.y += size.y * 0.5;  // Lifts it up by half its height
-
-              resolve(obj);
-              obj.visible = false;
-
-              obj.traverse((child) => {
-                if (child.isMesh) {
-                  if (!child.material) {
-                    child.material = new THREE.MeshStandardMaterial({
-                      color: 0x333333,
-                      metalness: 0.1,
-                      roughness: 0.4,
-                    });
-                  }
-                  child.castShadow = true;
-                  child.receiveShadow = true;
+            obj.traverse((child) => {
+              if (child.isMesh) {
+                if (!child.material) {
+                  child.material = new THREE.MeshStandardMaterial({
+                    color: 0x333333,
+                    metalness: 0.1,
+                    roughness: 0.4,
+                  });
                 }
-              });
+                child.castShadow = true;
+                child.receiveShadow = true;
+              }
+            });
 
-              cachedModels.current[path] = obj;
-              sceneRef.current.add(obj);
-              resolve();
-            },
-            undefined,
-            (error) => {
-              console.error(`Failed to load model ${path}:`, error);
-              reject(error);
-            }
-          );
-        });
-
-      try {
-        await Promise.all(allOptions.map((opt) => loadModel(opt.value)));
-        if (isMounted) {
-          setSelectedImage(allOptions[0].value);
-          console.log("Cached models:", Object.keys(cachedModels.current));
-          setModeLoading(false);
-        }
-      } catch (e) {
-        console.error("Error loading models:", e);
-        setModeLoading(false);
-      }
-    };
-
-    const timer = setTimeout(init, 100);
-
-    return () => {
-      isMounted = false;
-      clearTimeout(timer);
-
-      faceMeshRef.current?.close();
-      faceMeshRef.current = null;
-
-      cameraRef.current?.stop?.();
-      cameraRef.current = null;
-
-      if (rendererRef.current) {
-        rendererRef.current.dispose();
-        rendererRef.current.forceContextLoss?.();
-        rendererRef.current = null;
-      }
-
-      if (sceneRef.current) {
-        sceneRef.current.traverse((object) => {
-          if (object.isMesh) {
-            object.geometry?.dispose();
-            if (Array.isArray(object.material)) {
-              object.material.forEach((m) => m.dispose());
-            } else {
-              object.material?.dispose();
-            }
+            cachedModels.current[path] = obj;
+            sceneRef.current.add(obj);
+            resolve();
+          },
+          undefined,
+          (error) => {
+            console.error(`Failed to load model ${path}:`, error);
+            reject(error);
           }
-        });
-        sceneRef.current.clear();
-        sceneRef.current = null;
+        );
+      });
+
+    try {
+      await Promise.all(allOptions.map((opt) => loadModel(opt.value)));
+      if (isMounted) {
+        setSelectedImage(allOptions[0].value);
+        setModelsLoaded(true);
+        console.log("Cached models:", Object.keys(cachedModels.current));
+      }
+    } catch (e) {
+      console.error("Error loading models:", e);
+      setModeLoading(false);
+    }
+  };
+
+  const timer = setTimeout(init, 100);
+
+  return () => {
+    isMounted = false;
+    clearTimeout(timer);
+
+    faceMeshRef.current?.close();
+    faceMeshRef.current = null;
+
+    cameraRef.current?.stop?.();
+    cameraRef.current = null;
+
+    if (rendererRef.current) {
+      rendererRef.current.dispose();
+      rendererRef.current.forceContextLoss?.();
+      rendererRef.current = null;
+    }
+
+    if (sceneRef.current) {
+      sceneRef.current.traverse((object) => {
+        if (object.isMesh) {
+          object.geometry?.dispose();
+          if (Array.isArray(object.material)) {
+            object.material.forEach((m) => m.dispose());
+          } else {
+            object.material?.dispose();
+          }
+        }
+      });
+      sceneRef.current.clear();
+      sceneRef.current = null;
+    }
+
+    cancelAnimationFrame(animationFrameId.current);
+  };
+}, []);
+
+  
+  useEffect(() => {
+    const canvas = threeCanvasRef.current;
+    const renderer = rendererRef.current;
+    const camera = threeCameraRef.current;
+    const video = videoRef.current;
+
+    const container = canvas?.parentElement;
+    if (!container || !canvas || !renderer || !camera) return;
+
+    const resize = () => {
+      const width = container.clientWidth;
+      const height = container.clientHeight;
+      const bounds = video?.getBoundingClientRect() || { width, height };
+
+      // Update canvas sizes
+      canvas.width = width;
+      canvas.height = height;
+      canvas.style.width = "100%";
+      canvas.style.height = "100%";
+
+      if (canvasRef.current) {
+        canvasRef.current.width = bounds.width;
+        canvasRef.current.height = bounds.height;
+        canvasRef.current.style.width = "100%";
+        canvasRef.current.style.height = "100%";
+        threeCanvasRef.current.style.width = '100%';
+        threeCanvasRef.current.style.height = '100%';
       }
 
-      cancelAnimationFrame(animationFrameId.current);
+      if (useWebcam && video) {
+        // Match video dimensions if available
+        const videoWidth = video.videoWidth || width;
+        const videoHeight = video.videoHeight || height;
+        canvas.width = videoWidth;
+        canvas.height = videoHeight;
+        canvasRef.current.width = videoWidth;
+        canvasRef.current.height = videoHeight;
+      }
+
+      // Update renderer and camera
+      renderer.setSize(width, height, false);
+      renderer.setPixelRatio(window.devicePixelRatio);
+
+      camera.aspect = width / height;
+      camera.updateProjectionMatrix();
     };
-  }, []);
-  
-  // Resizes both canvases to match the container size.
-  //   useEffect(() => {
-  //   const canvas = threeCanvasRef.current;
-  //   const renderer = rendererRef.current;
-  //   const camera = threeCameraRef.current;
 
-  //   const container = canvas?.parentElement;
-  //   if (!container || !canvas || !renderer || !camera) return;
+    const observer = new ResizeObserver(resize);
+    observer.observe(container);
+    resize(); // Initial call
 
-  //   const resize = () => {
-  //     const width = container.clientWidth;
-  //     const height = container.clientHeight;
-
-  //     // Update canvas size (for styling)
-  //     canvas.width = width;
-  //     canvas.height = height;
-  //     canvas.style.width = "100%";
-  //     canvas.style.height = "100%";
-
-  //     // Resize Three.js renderer and update camera
-  //     renderer.setSize(width, height, false);
-  //     renderer.setPixelRatio(window.devicePixelRatio);
-
-  //     camera.aspect = width / height;
-  //     camera.updateProjectionMatrix();
-  //   };
-
-  //   const observer = new ResizeObserver(resize);
-  //   observer.observe(container);
-  //   resize(); // Initial call
-
-  //   return () => observer.disconnect();
-  // }, []);
+    return () => observer.disconnect();
+  }, [useWebcam]);
 
   // Webcam Handling 
-  
   useEffect(() => {
     if (useWebcam) {
       setModeLoading(true);
@@ -242,70 +274,95 @@ export default function TryOn() {
   }, [useWebcam]);
 
   const startWebcam = async () => {
-    try {
-      console.log("Starting webcam...");
-      const stream = await navigator.mediaDevices.getUserMedia({ video: true });
-      if (!videoRef.current) return;
+  try {
+    console.log("Starting webcam...");
 
-      videoRef.current.srcObject = stream;
+    if (!faceMeshRef.current) {
+      console.warn("FaceMesh not initialized yet.");
+      return;
+    }
 
-      return new Promise((resolve) => {
-        videoRef.current.onloadedmetadata = () => {
-          videoRef.current.play().catch((e) => console.error('Video play failed:', e));
+    const stream = await navigator.mediaDevices.getUserMedia({ video: true });
+    if (!videoRef.current) return;
 
-          const videoWidth = videoRef.current.videoWidth;
-          const videoHeight = videoRef.current.videoHeight;
+    videoRef.current.srcObject = stream;
 
-          // Set video and canvas sizes
-          if (canvasRef.current) {
-            canvasRef.current.width = videoWidth;
-            canvasRef.current.height = videoHeight;
+    return new Promise((resolve) => {
+      videoRef.current.onloadedmetadata = () => {
+        videoRef.current.play().catch((e) => console.error('Video play failed:', e));
+
+        // Wait a moment for DOM to render and get accurate size
+        requestAnimationFrame(() => {
+          const bounds = videoRef.current.getBoundingClientRect();
+          const videoWidth = videoRef.current.videoWidth || bounds.width;
+        const videoHeight = videoRef.current.videoHeight || bounds.height;
+
+
+          // Update canvas sizes
+          [canvasRef.current, threeCanvasRef.current].forEach((c) => {
+            if (c) {
+              c.width = videoWidth;
+              c.height = videoHeight;
+              c.style.width = '100%';
+              c.style.height = '100%';
+            }
+          });
+
+          if (rendererRef.current) {
+            rendererRef.current.setSize(videoWidth, videoHeight, false);
+            rendererRef.current.setPixelRatio(window.devicePixelRatio);
           }
-          if (threeCanvasRef.current) {
-            threeCanvasRef.current.width = videoWidth;
-            threeCanvasRef.current.height = videoHeight;
-          }
 
-          // Optional: Mirror the video and canvas to match webcam perspective
+          threeCameraRef.current = new THREE.PerspectiveCamera(45, videoWidth / videoHeight, 0.01, 1000);
+          threeCameraRef.current.position.set(0, 0, 2);
+          threeCameraRef.current.lookAt(0, 0, 0);
+
+          // Mirror
           videoRef.current.style.transform = "scaleX(-1)";
-          if (threeCanvasRef.current) {
-            threeCanvasRef.current.style.transform = "scaleX(-1)";
-          }
+          threeCanvasRef.current.style.transform = "scaleX(-1)";
+          canvasRef.current.style.transform = "scaleX(-1)";
 
-          // Setup Three.js renderer
-          rendererRef.current.setSize(videoWidth, videoHeight);
-          rendererRef.current.setPixelRatio(window.devicePixelRatio || 1);
-
-          // Setup PerspectiveCamera
-          const fov = 45; // degrees
-          const aspect = videoWidth / videoHeight;
-          const near = 0.01;
-          const far = 1000;
-
-          threeCameraRef.current = new THREE.PerspectiveCamera(fov, aspect, near, far);
-
-          // Position camera to face user (Z distance may need tuning based on 3D model scale)
-          threeCameraRef.current.position.set(0, 0, 2); // centered and pulled slightly forward
-          threeCameraRef.current.lookAt(0, 0, 0); // looking toward scene origin
-
-          // Setup MediaPipe camera for face landmark tracking
+          // Start FaceMesh stream
           cameraRef.current = new mpCameraUtils.Camera(videoRef.current, {
             onFrame: async () => {
-              // Process face mesh, landmarks, etc.
+              try {
+                await faceMeshRef.current.send({ image: videoRef.current });
+              } catch (err) {
+                console.error("FaceMesh send error (webcam):", err);
+              }
             },
             width: videoWidth,
             height: videoHeight,
           });
 
           cameraRef.current.start();
+
           resolve();
-        };
-      });
-    } catch (e) {
-      console.error('Failed to start webcam:', e);
-      throw e;
+        });
+      };
+    });
+  } catch (e) {
+    console.error('Failed to start webcam:', e);
+    throw e;
+  }
+};
+
+
+  useEffect(() => {
+    if (useWebcam && faceMeshReady && modelsLoaded) {
+      setModeLoading(true);
+      setImageURL(null);
+      startWebcam()
+        .then(() => setModeLoading(false))
+        .catch((e) => {
+          console.error("Webcam initialization failed:", e);
+          setModeLoading(false);
+        });
+    } else if (!useWebcam) {
+      console.log("Switching to uploaded image mode...");
+      stopWebcam();
     }
-  };
+  }, [useWebcam, faceMeshReady, modelsLoaded]);
 
   const stopWebcam = () => {
     console.log("Stopping webcam...");
@@ -358,8 +415,8 @@ export default function TryOn() {
       canvasRef.current.height = naturalHeight;
     }
     if (threeCanvasRef.current) {
-      threeCanvasRef.current.width = naturalWidth;
-      threeCanvasRef.current.height = naturalHeight;
+      threeCanvasRef.current.width = bounds.width;
+      threeCanvasRef.current.height = bounds.height;
     }
     
     rendererRef.current.setSize(naturalWidth, naturalHeight);
@@ -368,10 +425,9 @@ export default function TryOn() {
     const aspect = naturalWidth / naturalHeight;
     const frustumSize = 2;
     threeCameraRef.current.left = -frustumSize * aspect / 2;
-    threeCameraRef.current.right = frustumSize * aspect / 2;
-    threeCameraRef.current.top = frustumSize / 2;
-    threeCameraRef.current.bottom = -frustumSize / 2;
-    threeCameraRef.current.scale.x = -1; 
+    threeCameraRef.current.aspect = aspect;
+    threeCameraRef.current.updateProjectionMatrix();
+
 
     threeCameraRef.current.updateProjectionMatrix();
 
@@ -449,7 +505,7 @@ export default function TryOn() {
   // Normalized device coordinates [-1, 1]
       const ndcX = (lm.x - 0.5) * 2;
       const ndcY = (0.5 - lm.y) * 2; // y is flipped
-      const ndcZ = lm.z ; // Adjust depth scale if needed
+      const ndcZ = 0.0 ; 
 
       // Convert to 3D world space using unprojection
       const vec = new THREE.Vector3(ndcX, ndcY, ndcZ);
@@ -576,38 +632,37 @@ export default function TryOn() {
         </div>
 
         <div className="relative w-full max-w-3xl aspect-video border rounded-xl overflow-hidden bg-white shadow">
-          {useWebcam ? (
-            <video
-              ref={videoRef}
-              autoPlay
-              muted
-              playsInline
-              className={`w-full h-full object-contain transition-opacity duration-300 ${
-                useWebcam ? 'scale-x-[-1]' : ''
-              } ${modeLoading ? 'opacity-0' : 'opacity-100'}`}
-            />
-          ) : (
-            <img
-              ref={imageRef}
-              src={imageURL}
-              alt="Uploaded try-on image"
-              className="w-full h-full object-contain"
-            />
-          )}
-          <canvas
-            ref={canvasRef}
-            className={`absolute inset-0 pointer-events-none ${useWebcam ? 'scale-x-[-1]' : ''}`}
+        {useWebcam ? (
+          <video
+          ref={videoRef}
+          autoPlay
+          muted
+          playsInline
+          className="absolute inset-0 w-full h-full object-contain transition-opacity duration-300 bg-black"
+        />
+
+        ) : (
+          <img
+            ref={imageRef}
+            src={imageURL}
+            alt="Uploaded try-on image"
+            className="absolute inset-0 w-full h-full object-contain"
           />
-          <canvas
-            ref={threeCanvasRef}
-            className={`absolute inset-0 pointer-events-none ${useWebcam ? 'scale-x-[-1]' : ''}`}
-          />
-          {modeLoading && (
-            <div className="absolute inset-0 flex items-center justify-center bg-white/70 z-40">
-              <div className="w-10 h-10 border-4 border-blue-500 border-t-transparent rounded-full animate-spin" />
-            </div>
-          )}
-        </div>
+        )}
+        <canvas
+          ref={canvasRef}
+          className="absolute top-0 left-0 w-full h-full pointer-events-none"
+        />
+        <canvas
+          ref={threeCanvasRef}
+          className="absolute top-0 left-0 w-full h-full pointer-events-none"
+        />
+        {modeLoading && (
+          <div className="absolute inset-0 flex items-center justify-center bg-white/70 z-40">
+            <div className="w-10 h-10 border-4 border-blue-500 border-t-transparent rounded-full animate-spin" />
+          </div>
+        )}
+      </div>
       </div>
     </div>
   );
