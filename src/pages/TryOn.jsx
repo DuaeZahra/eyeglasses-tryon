@@ -32,12 +32,13 @@ export default function TryOn() {
   const allOptions = [{ label: 'Glasses 1', value: '/oculos.obj'                     
    }];
 
+// === Initialization: FaceMesh, Scene, Camera, Renderer, Lighting, Models ===
 useEffect(() => {
   let isMounted = true;
   if (!threeCanvasRef.current) return;
 
   const init = async () => {
-    // === FaceMesh ===
+    // === Setup FaceMesh ===
     const faceMesh = new mpFaceMesh.FaceMesh({
       locateFile: (file) => `https://cdn.jsdelivr.net/npm/@mediapipe/face_mesh/${file}`,
     });
@@ -57,16 +58,12 @@ useEffect(() => {
     faceMeshRef.current = faceMesh;
     setFaceMeshReady(true);
 
-    // === Scene Setup ===
+    // === Setup Scene ===
     sceneRef.current = new THREE.Scene();
-
     const canvas = threeCanvasRef.current;
     const video = videoRef.current;
 
-    // Wait a bit for DOM layout to finalize
-    await new Promise((res) => setTimeout(res, 100));
-
-    // Use actual visible video size, NOT intrinsic resolution
+    await new Promise((res) => setTimeout(res, 100)); // Wait for layout
     const bounds = video.getBoundingClientRect();
     const canvasWidth = bounds.width;
     const canvasHeight = bounds.height;
@@ -75,17 +72,15 @@ useEffect(() => {
     canvas.width = canvasWidth;
     canvas.height = canvasHeight;
 
-    // === Camera ===
-    const fov = 15;
-    const near = 0.1;
-    const far = 1000;
-    threeCameraRef.current = new THREE.PerspectiveCamera(fov, aspect, near, far);
+    // === Setup Camera ===
+    threeCameraRef.current = new THREE.PerspectiveCamera(15, aspect, 0.1, 1000);
     threeCameraRef.current.position.z = 2.5;
+    threeCameraRef.current.updateProjectionMatrix();
 
-    // === Renderer ===
+    // === Setup Renderer ===
     try {
       rendererRef.current = new THREE.WebGLRenderer({
-        canvas: canvas,
+        canvas,
         alpha: true,
         antialias: true,
       });
@@ -98,10 +93,6 @@ useEffect(() => {
       return;
     }
 
-    threeCameraRef.current.aspect = aspect;
-    threeCameraRef.current.updateProjectionMatrix();
-    rendererRef.current.setSize(canvasWidth, canvasHeight);
-
     // === Lighting ===
     sceneRef.current.add(new THREE.AmbientLight(0xffffff, 0.8));
     const directionalLight = new THREE.DirectionalLight(0xffffff, 0.4);
@@ -110,6 +101,7 @@ useEffect(() => {
 
     // === Load Glasses Models ===
     const loader = new OBJLoader();
+
     const loadModel = (path) =>
       new Promise((resolve, reject) => {
         loader.load(
@@ -118,22 +110,16 @@ useEffect(() => {
             const box = new THREE.Box3().setFromObject(obj);
             const center = box.getCenter(new THREE.Vector3());
             obj.position.sub(center);
-
-            // Lift model upward slightly
-            const size = box.getSize(new THREE.Vector3());
-            obj.position.y += size.y * 0.5;
-
+            obj.position.y += box.getSize(new THREE.Vector3()).y * 0.5;
             obj.visible = false;
 
             obj.traverse((child) => {
               if (child.isMesh) {
-                if (!child.material) {
-                  child.material = new THREE.MeshStandardMaterial({
-                    color: 0x333333,
-                    metalness: 0.1,
-                    roughness: 0.4,
-                  });
-                }
+                child.material ||= new THREE.MeshStandardMaterial({
+                  color: 0x333333,
+                  metalness: 0.1,
+                  roughness: 0.4,
+                });
                 child.castShadow = true;
                 child.receiveShadow = true;
               }
@@ -183,14 +169,12 @@ useEffect(() => {
     }
 
     if (sceneRef.current) {
-      sceneRef.current.traverse((object) => {
-        if (object.isMesh) {
-          object.geometry?.dispose();
-          if (Array.isArray(object.material)) {
-            object.material.forEach((m) => m.dispose());
-          } else {
-            object.material?.dispose();
-          }
+      sceneRef.current.traverse((obj) => {
+        if (obj.isMesh) {
+          obj.geometry?.dispose();
+          Array.isArray(obj.material)
+            ? obj.material.forEach((m) => m.dispose())
+            : obj.material?.dispose();
         }
       });
       sceneRef.current.clear();
@@ -200,79 +184,48 @@ useEffect(() => {
     cancelAnimationFrame(animationFrameId.current);
   };
 }, []);
-
   
+//RESIZE HANDLER
   useEffect(() => {
-    const canvas = threeCanvasRef.current;
-    const renderer = rendererRef.current;
-    const camera = threeCameraRef.current;
-    const video = videoRef.current;
+  const resizeEverything = () => {
+    const container = threeCanvasRef.current?.parentElement;
+    if (
+      !container || !videoRef.current || !canvasRef.current ||
+      !threeCanvasRef.current || !rendererRef.current || !threeCameraRef.current
+    ) return;
 
-    const container = canvas?.parentElement;
-    if (!container || !canvas || !renderer || !camera) return;
+    const width = container.clientWidth;
+    const height = container.clientHeight;
 
-    const resize = () => {
-      const width = container.clientWidth;
-      const height = container.clientHeight;
-      const bounds = video?.getBoundingClientRect() || { width, height };
+    // Resize video & canvases
+    [videoRef.current, canvasRef.current, threeCanvasRef.current].forEach((el) => {
+      el.style.width = '100%';
+      el.style.height = '100%';
+    });
 
-      // Update canvas sizes
-      canvas.width = width;
-      canvas.height = height;
-      canvas.style.width = "100%";
-      canvas.style.height = "100%";
+    [canvasRef.current, threeCanvasRef.current].forEach((c) => {
+      c.width = width;
+      c.height = height;
+    });
 
-      if (canvasRef.current) {
-        canvasRef.current.width = bounds.width;
-        canvasRef.current.height = bounds.height;
-        canvasRef.current.style.width = "100%";
-        canvasRef.current.style.height = "100%";
-        threeCanvasRef.current.style.width = '100%';
-        threeCanvasRef.current.style.height = '100%';
-      }
+    rendererRef.current.setSize(width, height, false);
+    rendererRef.current.setPixelRatio(window.devicePixelRatio);
 
-      if (useWebcam && video) {
-        // Match video dimensions if available
-        const videoWidth = video.videoWidth || width;
-        const videoHeight = video.videoHeight || height;
-        canvas.width = videoWidth;
-        canvas.height = videoHeight;
-        canvasRef.current.width = videoWidth;
-        canvasRef.current.height = videoHeight;
-      }
+    threeCameraRef.current.aspect = width / height;
+    threeCameraRef.current.updateProjectionMatrix();
+  };
 
-      // Update renderer and camera
-      renderer.setSize(width, height, false);
-      renderer.setPixelRatio(window.devicePixelRatio);
+  const observer = new ResizeObserver(resizeEverything);
+  if (threeCanvasRef.current?.parentElement) {
+    observer.observe(threeCanvasRef.current.parentElement);
+  }
 
-      camera.aspect = width / height;
-      camera.updateProjectionMatrix();
-    };
+  resizeEverything();
+  return () => observer.disconnect();
+}, []);
 
-    const observer = new ResizeObserver(resize);
-    observer.observe(container);
-    resize(); // Initial call
 
-    return () => observer.disconnect();
-  }, [useWebcam]);
-
-  // Webcam Handling 
-  useEffect(() => {
-    if (useWebcam) {
-      setModeLoading(true);
-      setImageURL(null);
-      startWebcam()
-        .then(() => setModeLoading(false))
-        .catch((e) => {
-          console.error('Webcam initialization failed:', e);
-          setModeLoading(false);
-        });
-    } else {
-      console.log("Switching to uploaded image mode...");
-      stopWebcam();
-    }
-  }, [useWebcam]);
-
+//Starts cam
   const startWebcam = async () => {
   try {
     console.log("Starting webcam...");
@@ -317,6 +270,7 @@ useEffect(() => {
           threeCameraRef.current.position.set(0, 0, 2);
           threeCameraRef.current.lookAt(0, 0, 0);
 
+
           // Mirror
           videoRef.current.style.transform = "scaleX(-1)";
           threeCanvasRef.current.style.transform = "scaleX(-1)";
@@ -347,35 +301,35 @@ useEffect(() => {
   }
 };
 
-
   useEffect(() => {
-    if (useWebcam && faceMeshReady && modelsLoaded) {
-      setModeLoading(true);
-      setImageURL(null);
-      startWebcam()
-        .then(() => setModeLoading(false))
-        .catch((e) => {
-          console.error("Webcam initialization failed:", e);
-          setModeLoading(false);
-        });
-    } else if (!useWebcam) {
-      console.log("Switching to uploaded image mode...");
-      stopWebcam();
-    }
-  }, [useWebcam, faceMeshReady, modelsLoaded]);
+  if (useWebcam && faceMeshReady && modelsLoaded) {
+    setModeLoading(true);
+    setImageURL(null);
+    startWebcam()
+      .then(() => setModeLoading(false))
+      .catch((e) => {
+        console.error("Webcam initialization failed:", e);
+        setModeLoading(false);
+      });
+  } else if (!useWebcam) {
+    console.log("Switching to uploaded image mode...");
+    stopWebcam();
+  }
+}, [useWebcam, faceMeshReady, modelsLoaded]);
 
-  const stopWebcam = () => {
-    console.log("Stopping webcam...");
-    if (videoRef.current?.srcObject) {
-      videoRef.current.srcObject.getTracks().forEach((track) => track.stop());
-      videoRef.current.srcObject = null;
-    }
+const stopWebcam = () => {
+  console.log("Stopping webcam...");
+  if (videoRef.current?.srcObject) {
+    videoRef.current.srcObject.getTracks().forEach((track) => track.stop());
+    videoRef.current.srcObject = null;
+  }
 
-    if (cameraRef.current) {
-      cameraRef.current.stop();
-      cameraRef.current = null;
-    }
-  };
+  if (cameraRef.current) {
+    cameraRef.current.stop();
+    cameraRef.current = null;
+  }
+};
+
 
   // Image Handling
   useEffect(() => {
@@ -414,10 +368,12 @@ useEffect(() => {
       canvasRef.current.width = naturalWidth;
       canvasRef.current.height = naturalHeight;
     }
-    if (threeCanvasRef.current) {
+    if (threeCanvasRef.current && imageRef.current) {
+      const bounds = imageRef.current.getBoundingClientRect();
       threeCanvasRef.current.width = bounds.width;
       threeCanvasRef.current.height = bounds.height;
     }
+
     
     rendererRef.current.setSize(naturalWidth, naturalHeight);
     
@@ -631,32 +587,33 @@ useEffect(() => {
           </div>
         </div>
 
-        <div className="relative w-full max-w-3xl aspect-video border rounded-xl overflow-hidden bg-white shadow">
+        <div className="relative-container relative w-full max-w-3xl aspect-video border rounded-xl overflow-hidden bg-white shadow">
         {useWebcam ? (
-          <video
-          ref={videoRef}
-          autoPlay
-          muted
-          playsInline
-          className="absolute inset-0 w-full h-full object-contain transition-opacity duration-300 bg-black"
-        />
+  <video
+    ref={videoRef}
+    autoPlay
+    muted
+    playsInline
+    className="absolute top-0 left-0 w-full h-full object-cover video"
+  />
+          ) : (
+            <img
+              ref={imageRef}
+              src={imageURL}
+              alt="Uploaded try-on image"
+              className="absolute top-0 left-0 w-full h-full object-contain"
+            />
+          )}
 
-        ) : (
-          <img
-            ref={imageRef}
-            src={imageURL}
-            alt="Uploaded try-on image"
-            className="absolute inset-0 w-full h-full object-contain"
+          <canvas
+            ref={canvasRef}
+            className="absolute top-0 left-0 w-full h-full pointer-events-none z-10 canvas"
           />
-        )}
-        <canvas
-          ref={canvasRef}
-          className="absolute top-0 left-0 w-full h-full pointer-events-none"
-        />
-        <canvas
-          ref={threeCanvasRef}
-          className="absolute top-0 left-0 w-full h-full pointer-events-none"
-        />
+
+          <canvas
+            ref={threeCanvasRef}
+            className="absolute top-0 left-0 w-full h-full pointer-events-none z-20 three-canvas"
+          />
         {modeLoading && (
           <div className="absolute inset-0 flex items-center justify-center bg-white/70 z-40">
             <div className="w-10 h-10 border-4 border-blue-500 border-t-transparent rounded-full animate-spin" />
