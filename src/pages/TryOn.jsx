@@ -588,103 +588,96 @@ export default function TryOn() {
 
   // Main render loop
   const drawLoop3D = () => {
-    const modelKey = selectedImage || allOptions[0]?.value;
-    const glassesModel = cachedModels.current[modelKey];
-    const landmarks = faceCache.current[0]?.landmarks || [];
+  const modelKey = selectedImage || allOptions[0]?.value;
+  const glassesModel = cachedModels.current[modelKey];
+  const landmarks = faceCache.current[0]?.landmarks || [];
 
-    if (!glassesModel || !sceneRef.current || !rendererRef.current || !threeCameraRef.current) {
-      return;
-    }
+  if (!glassesModel || !sceneRef.current || !rendererRef.current || !threeCameraRef.current) {
+    return;
+    
+  }
 
-    // Hide all models first
-    Object.values(cachedModels.current).forEach(model => {
-      if (model) model.visible = false;
-    });
+  // Hide all models first
+  Object.values(cachedModels.current).forEach(model => {
+    if (model) model.visible = false;
+  });
 
-    // Clean up previous landmark spheres
-    cleanupLandmarkSpheres();
+  // Clean up previous landmark spheres
+  cleanupLandmarkSpheres();
 
-    if (landmarks.length === 0) {
-      // No face detected, just render empty scene
-      rendererRef.current.render(sceneRef.current, threeCameraRef.current);
-      return;
-    }
-
-    // Show selected glasses
-    glassesModel.visible = true;
-
-    // Key facial landmarks
-    const get = (i) => landmarks[i];
-    const leftPos = convertCoords(get(133));   // Left eye inner corner
-    const rightPos = convertCoords(get(362));  // Right eye inner corner
-    const nose = convertCoords(get(197));     // Nose tip
-    const chinPos = convertCoords(get(175));      // Chin
-    const leftOuter = convertCoords(get(33));  // Left eye outer corner
-    const rightOuter = convertCoords(get(263)); // Right eye outer corner
-    const foreheadCenter = convertCoords(get(10));    // Forehead center
-    const chinTip = convertCoords(get(175));          // Chin tip
-
-
-
-    // Calculate glasses position (between eyes, slightly above)
-    const eyeCenter = {
-      x: (leftPos.x + rightPos.x) / 2,
-      y: ((leftPos.y + rightPos.y) / 2 + nose.y) / 2,
-      z: (leftPos.z + rightPos.z) / 2,
-    };
-
-    const glassesOffset = 0.0005; // Increase or tweak this
-glassesModel.position.set(
-  eyeCenter.x,
-  eyeCenter.y,
-  eyeCenter.z + glassesOffset // push outward
-);
-
-    // Calculate scale based on eye distance
-    const eyeDist = Math.hypot(rightPos.x - leftPos.x, rightPos.y - leftPos.y);
-    const baseEyeDistance = 0.3;
-    const scale = (eyeDist / baseEyeDistance) * 0.8;
-    glassesModel.scale.set(scale, scale, scale);
-
-    // Calculate rotation
-    // Right: eye-to-eye vector
-    const right = new THREE.Vector3().subVectors(rightOuter, leftOuter).normalize();
-
-    // Up: forehead to chin
-    const up = new THREE.Vector3().subVectors(foreheadCenter, chinTip).normalize();
-
-    // Forward: orthogonal to right and up
-    const forward = new THREE.Vector3().crossVectors(right, up).normalize();
-
-    // Re-orthogonalize up vector to remove drift (in case of numerical instability)
-    up.crossVectors(forward, right).normalize();
-
-    // Construct rotation matrix from orthogonal basis
-    const rotationMatrix = new THREE.Matrix4().makeBasis(right, up, forward);
-    glassesModel.setRotationFromMatrix(rotationMatrix);
-
-
-    // Optional: Add landmark visualization for debugging
-    // if (process.env.NODE_ENV === 'development') {
-    //   const sphereGeometry = new THREE.SphereGeometry(0.002, 8, 8);
-      
-    //   // Show key landmarks
-    //   const keyLandmarks = [133, 362, 4, 175, 33, 263];
-    //   keyLandmarks.forEach((index, i) => {
-    //     const pos = convertCoords(get(index));
-    //     const sphereMaterial = new THREE.MeshBasicMaterial({ 
-    //       color: new THREE.Color().setHSL(i / keyLandmarks.length, 1.0, 0.5) 
-    //     });
-    //     const sphere = new THREE.Mesh(sphereGeometry, sphereMaterial);
-    //     sphere.position.copy(pos);
-    //     sceneRef.current.add(sphere);
-    //     landmarkSpheresRef.current.push(sphere);
-    //   });
-    // }
-
-    // Render the scene
+  if (landmarks.length === 0) {
     rendererRef.current.render(sceneRef.current, threeCameraRef.current);
+    return;
+  }
+
+  // Show selected glasses
+  glassesModel.visible = true;
+
+  // Helper to get converted THREE.Vector3 from landmark index
+  const getLM = (i) => {
+    const lm = convertCoords(landmarks[i]); // Assumes convertCoords returns { x, y, z }
+    return new THREE.Vector3(lm.x, lm.y, lm.z);
   };
+
+  // Key landmark positions
+  const leftPos = getLM(133);   // Left eye inner
+  const rightPos = getLM(362);  // Right eye inner
+  const nose = getLM(197);      // Nose tip
+
+  const leftOuter = getLM(33);         // Left eye outer
+  const rightOuter = getLM(263);       // Right eye outer
+  const foreheadCenter = getLM(10);    // Forehead center
+  const chinTip = getLM(175);          // Chin tip
+
+  // Position glasses between the eyes, slightly above nose
+  const eyeCenter = new THREE.Vector3()
+    .addVectors(leftPos, rightPos)
+    .multiplyScalar(0.5)
+    .add(new THREE.Vector3(0, (nose.y - (leftPos.y + rightPos.y) / 2) * 0.5, 0)); // slight lift
+
+  glassesModel.position.copy(eyeCenter);
+
+  // Scale based on eye distance
+  const eyeDist = leftPos.distanceTo(rightPos);
+  const baseEyeDistance = 0.3; // tuning parameter
+  const scale = (eyeDist / baseEyeDistance) * 0.8;
+  glassesModel.scale.set(scale, scale, scale);
+
+  // ROTATION using 3D landmark vectors ===
+
+  const right = new THREE.Vector3().subVectors(rightOuter, leftOuter).normalize();
+const up = new THREE.Vector3().subVectors(foreheadCenter, chinTip).normalize();
+const forward = new THREE.Vector3().crossVectors(right, up).normalize();
+
+// IMPORTANT: re-orthogonalize right again for stability
+right.crossVectors(up, forward).normalize();
+
+// Create rotation matrix with basis in correct orientation
+const rotationMatrix = new THREE.Matrix4().makeBasis(right, up, forward);
+glassesModel.setRotationFromMatrix(rotationMatrix);
+
+
+  // Optional: Landmark debugging
+  if (process.env.NODE_ENV === 'development') {
+    const sphereGeometry = new THREE.SphereGeometry(0.002, 8, 8);
+    const keyLandmarks = [133, 362, 4, 175, 33, 263];
+    keyLandmarks.forEach((index, i) => {
+      const pos = getLM(index);
+      const sphereMaterial = new THREE.MeshBasicMaterial({
+        color: new THREE.Color().setHSL(i / keyLandmarks.length, 1.0, 0.5)
+      });
+      const sphere = new THREE.Mesh(sphereGeometry, sphereMaterial);
+      sphere.position.copy(pos);
+      sceneRef.current.add(sphere);
+      landmarkSpheresRef.current.push(sphere);
+    });
+  }
+
+  // Final render
+  rendererRef.current.render(sceneRef.current, threeCameraRef.current);
+};
+
+
 
   // JSX 
   return (
