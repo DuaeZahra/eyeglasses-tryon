@@ -32,7 +32,7 @@ export default function TryOn() {
   const { selectedImage, setSelectedImage } = useSelectedGlasses();
   const allOptions = [
     { label: 'Glasses 1', value: '/oculos.obj' },
-    { label: 'Glasses 2', value: '/glasses2.obj' },
+    { label: 'Glasses 2', value: '/glasses.obj' },
     { label: 'Glasses 3', value: '/glasses3.obj' }
   ];
 
@@ -304,100 +304,105 @@ export default function TryOn() {
 
   // Start webcam
   const startWebcam = async () => {
-    try {
-      setError(null);
-      console.log("Starting webcam...");
+  try {
+    setError(null);
+    setModeLoading(true);
+    console.log("Starting webcam...");
 
-      if (!faceMeshRef.current) {
-        throw new Error("FaceMesh not initialized yet.");
-      }
+    if (!faceMeshRef.current) {
+      throw new Error("FaceMesh not initialized yet.");
+    }
 
-      const stream = await navigator.mediaDevices.getUserMedia({ 
-        video: { 
-          width: { ideal: 1280 },
-          height: { ideal: 720 },
-          facingMode: 'user'
-        } 
-      });
-      
-      if (!videoRef.current) return;
+    const stream = await navigator.mediaDevices.getUserMedia({ 
+      video: { 
+        width: { ideal: 1280 },
+        height: { ideal: 720 },
+        facingMode: 'user'
+      } 
+    });
 
-      videoRef.current.srcObject = stream;
+    if (!videoRef.current) return;
 
-      return new Promise((resolve, reject) => {
-        videoRef.current.onloadedmetadata = () => {
-          videoRef.current.play()
-            .then(() => {
-              requestAnimationFrame(() => {
-                const bounds = videoRef.current.getBoundingClientRect();
-                const videoWidth = videoRef.current.videoWidth || bounds.width;
-                const videoHeight = videoRef.current.videoHeight || bounds.height;
+    videoRef.current.srcObject = stream;
+    videoRef.current.style.visibility = 'hidden'; // Hide video until ready
 
-                // Update canvas sizes
-                [canvasRef.current, threeCanvasRef.current].forEach((c) => {
-                  if (c) {
-                    c.width = videoWidth;
-                    c.height = videoHeight;
-                    c.style.width = '100%';
-                    c.style.height = '100%';
-                  }
-                });
+    return new Promise((resolve, reject) => {
+      videoRef.current.onloadedmetadata = () => {
+        videoRef.current.play()
+          .then(() => {
+            videoRef.current.style.visibility = 'visible'; // Show video when ready
+            requestAnimationFrame(() => {
+              const bounds = videoRef.current.getBoundingClientRect();
+              const videoWidth = videoRef.current.videoWidth || bounds.width;
+              const videoHeight = videoRef.current.videoHeight || bounds.height;
 
-                if (rendererRef.current && threeCameraRef.current) {
-                  rendererRef.current.setSize(videoWidth, videoHeight, false);
-                  
-                  // Update camera
-                  const aspect = videoWidth / videoHeight;
-                  threeCameraRef.current.aspect = aspect;
-                  threeCameraRef.current.fov = 45;
-                  threeCameraRef.current.position.set(0, 0, 2);
-                  threeCameraRef.current.lookAt(0, 0, 0);
-                  threeCameraRef.current.updateProjectionMatrix();
-                }
-
-                // Mirror for selfie view
-                videoRef.current.style.transform = "scaleX(-1)";
-                threeCanvasRef.current.style.transform = "scaleX(-1)";
-                canvasRef.current.style.transform = "scaleX(-1)";
-
-                // Start MediaPipe camera
-                try {
-                  cameraRef.current = new mpCameraUtils.Camera(videoRef.current, {
-                    onFrame: async () => {
-                      try {
-                        if (faceMeshRef.current && videoRef.current.readyState >= 2) {
-                          await faceMeshRef.current.send({ image: videoRef.current });
-                        }
-                      } catch (err) {
-                        console.error("FaceMesh send error:", err);
-                      }
-                    },
-                    width: videoWidth,
-                    height: videoHeight,
-                  });
-
-                  cameraRef.current.start();
-                  resolve();
-                } catch (err) {
-                  console.error("Camera setup failed:", err);
-                  reject(err);
+              // Update canvas sizes
+              [canvasRef.current, threeCanvasRef.current].forEach((c) => {
+                if (c) {
+                  c.width = videoWidth;
+                  c.height = videoHeight;
+                  c.style.width = '100%';
+                  c.style.height = '100%';
                 }
               });
-            })
-            .catch(reject);
-        };
-        
-        videoRef.current.onerror = reject;
-        
-        // Timeout fallback
-        setTimeout(() => reject(new Error("Video load timeout")), 10000);
-      });
-    } catch (err) {
-      console.error('Failed to start webcam:', err);
-      setError('Failed to access webcam. Please check permissions and try again.');
-      throw err;
-    }
-  };
+
+              if (rendererRef.current && threeCameraRef.current) {
+                rendererRef.current.setSize(videoWidth, videoHeight, false);
+                const aspect = videoWidth / videoHeight;
+                threeCameraRef.current.aspect = aspect;
+                threeCameraRef.current.fov = 45;
+                threeCameraRef.current.position.set(0, 0, 2);
+                threeCameraRef.current.lookAt(0, 0, 0);
+                threeCameraRef.current.updateProjectionMatrix();
+              }
+
+              // Mirror for selfie view
+              videoRef.current.style.transform = "scaleX(-1)";
+              threeCanvasRef.current.style.transform = "scaleX(-1)";
+              canvasRef.current.style.transform = "scaleX(-1)";
+
+              // Start MediaPipe camera
+              try {
+                cameraRef.current = new mpCameraUtils.Camera(videoRef.current, {
+                  onFrame: async () => {
+                    try {
+                      if (faceMeshRef.current && videoRef.current.readyState >= 2) {
+                        await faceMeshRef.current.send({ image: videoRef.current });
+                      }
+                    } catch (err) {
+                      console.error("FaceMesh send error:", err);
+                    }
+                  },
+                  width: videoWidth,
+                  height: videoHeight,
+                });
+
+                cameraRef.current.start();
+                resolve();
+              } catch (err) {
+                console.error("Camera setup failed:", err);
+                reject(err);
+              }
+            });
+          })
+          .catch(reject);
+      };
+
+      videoRef.current.onerror = () => {
+        reject(new Error("Failed to load video stream."));
+      };
+
+      // Timeout for video loading
+      setTimeout(() => reject(new Error("Webcam load timeout")), 5000); // Reduced timeout
+    });
+  } catch (err) {
+    console.error('Failed to start webcam:', err);
+    setError('Failed to access webcam. Please check permissions and try again.');
+    throw err;
+  } finally {
+    setModeLoading(false);
+  }
+};
 
   // Stop webcam
   const stopWebcam = () => {
@@ -461,6 +466,10 @@ export default function TryOn() {
         if (!img || !rendererRef.current || !threeCameraRef.current) return;
 
         const { naturalWidth, naturalHeight } = img;
+        img.style.objectFit = "contain";
+        threeCanvasRef.current.style.objectFit = "contain";
+        canvasRef.current.style.objectFit = "contain";
+
         
         // Update canvas sizes
         if (canvasRef.current) {
@@ -492,6 +501,10 @@ export default function TryOn() {
         if (faceMeshReady && faceMeshRef.current) {
           try {
             await faceMeshRef.current.send({ image: img });
+            setTimeout(() => {
+              drawLoop3D(); 
+            }, 200);
+
           } catch (err) {
             console.error("FaceMesh send error (image):", err);
           }
@@ -514,60 +527,56 @@ export default function TryOn() {
 
   // Take snapshot
   const takeSnapshot = () => {
-    if (!canvasRef.current || !threeCanvasRef.current) return;
-    
-    try {
-      const c = canvasRef.current;
-      const t = threeCanvasRef.current;
-      const snapshot = document.createElement('canvas');
-      snapshot.width = c.width;
-      snapshot.height = c.height;
-      
-      const ctx = snapshot.getContext('2d');
-      
-      // Draw background (video or image)
-      if (useWebcam && videoRef.current) {
-        if (useWebcam) {
-          ctx.translate(snapshot.width, 0);
-          ctx.scale(-1, 1);
-        }
-        ctx.drawImage(videoRef.current, 0, 0, snapshot.width, snapshot.height);
-        ctx.setTransform(1, 0, 0, 1, 0, 0); // Reset transform
-      } else if (!useWebcam && imageRef.current) {
-        ctx.drawImage(imageRef.current, 0, 0, snapshot.width, snapshot.height);
-      }
-      
-      // Draw Three.js overlay
-      ctx.drawImage(t, 0, 0);
-      
-      // Download
-      const link = document.createElement('a');
-      link.download = `glasses-tryon-${Date.now()}.png`;
-      link.href = snapshot.toDataURL('image/png');
-      link.click();
-    } catch (err) {
-      console.error('Failed to take snapshot:', err);
-      setError('Failed to save snapshot.');
-    }
-  };
+  const baseCanvas = canvasRef.current;
+  const overlayCanvas = threeCanvasRef.current;
+
+  if (!baseCanvas || !overlayCanvas) {
+    console.warn("Missing canvas references.");
+    return;
+  }
+
+  const width = baseCanvas.width;
+  const height = baseCanvas.height;
+
+  // Create a new offscreen canvas to compose both layers
+  const compositeCanvas = document.createElement("canvas");
+  compositeCanvas.width = width;
+  compositeCanvas.height = height;
+  const ctx = compositeCanvas.getContext("2d");
+
+  // Draw base image/video
+  ctx.drawImage(baseCanvas, 0, 0, width, height);
+
+  // Draw 3D glasses layer (WebGL)
+  ctx.drawImage(overlayCanvas, 0, 0, width, height);
+
+  // Export as PNG
+  const screenshotData = compositeCanvas.toDataURL("image/png");
+
+  const link = document.createElement("a");
+  link.href = screenshotData;
+  link.download = "tryon-snapshot.png";
+  link.click();
+};
+
 
   // Main Animation Loop
   useEffect(() => {
-    if (!faceMeshReady || modeLoading || !threeCanvasRef.current || !modelsLoaded) return;
+  if (!faceMeshReady || modeLoading || !threeCanvasRef.current || !modelsLoaded || !useWebcam) return;
 
-    const animationLoop = () => {
-      drawLoop3D();
-      animationFrameId.current = requestAnimationFrame(animationLoop);
-    };
-
+  const animationLoop = () => {
+    drawLoop3D();
     animationFrameId.current = requestAnimationFrame(animationLoop);
+  };
 
-    return () => {
-      if (animationFrameId.current) {
-        cancelAnimationFrame(animationFrameId.current);
-      }
-    };
-  }, [faceMeshReady, modeLoading, selectedImage, useWebcam, modelsLoaded]);
+  animationFrameId.current = requestAnimationFrame(animationLoop);
+
+  return () => {
+    if (animationFrameId.current) {
+      cancelAnimationFrame(animationFrameId.current);
+    }
+  };
+}, [faceMeshReady, modeLoading, selectedImage, useWebcam, modelsLoaded]);
 
   // Convert MediaPipe coordinates to Three.js world space
   const convertCoords = (landmark) => {
@@ -577,7 +586,7 @@ export default function TryOn() {
     // Convert to NDC [-1,1]
     const ndcX = (landmark.x - 0.5) * 2;
     const ndcY = (0.5 - landmark.y) * 2; // Flip Y
-    const ndcZ = 0.0; // MediaPipe Z is typically small
+    const ndcZ = landmark.z * 0.8 ; // MediaPipe Z is typically small
     
     // Unproject from screen space to world space
     const vec = new THREE.Vector3(ndcX, ndcY, ndcZ);
@@ -594,7 +603,6 @@ export default function TryOn() {
 
   if (!glassesModel || !sceneRef.current || !rendererRef.current || !threeCameraRef.current) {
     return;
-    
   }
 
   // Hide all models first
@@ -643,7 +651,7 @@ export default function TryOn() {
   const scale = (eyeDist / baseEyeDistance) * 0.8;
   glassesModel.scale.set(scale, scale, scale);
 
-  // ROTATION using 3D landmark vectors ===
+  // === ROTATION using 3D landmark vectors ===
 
   const right = new THREE.Vector3().subVectors(rightOuter, leftOuter).normalize();
 const up = new THREE.Vector3().subVectors(foreheadCenter, chinTip).normalize();
@@ -658,25 +666,24 @@ glassesModel.setRotationFromMatrix(rotationMatrix);
 
 
   // Optional: Landmark debugging
-  if (process.env.NODE_ENV === 'development') {
-    const sphereGeometry = new THREE.SphereGeometry(0.002, 8, 8);
-    const keyLandmarks = [133, 362, 4, 175, 33, 263];
-    keyLandmarks.forEach((index, i) => {
-      const pos = getLM(index);
-      const sphereMaterial = new THREE.MeshBasicMaterial({
-        color: new THREE.Color().setHSL(i / keyLandmarks.length, 1.0, 0.5)
-      });
-      const sphere = new THREE.Mesh(sphereGeometry, sphereMaterial);
-      sphere.position.copy(pos);
-      sceneRef.current.add(sphere);
-      landmarkSpheresRef.current.push(sphere);
-    });
-  }
+  // if (process.env.NODE_ENV === 'development') {
+  //   const sphereGeometry = new THREE.SphereGeometry(0.002, 8, 8);
+  //   const keyLandmarks = [133, 362, 4, 175, 33, 263];
+  //   keyLandmarks.forEach((index, i) => {
+  //     const pos = getLM(index);
+  //     const sphereMaterial = new THREE.MeshBasicMaterial({
+  //       color: new THREE.Color().setHSL(i / keyLandmarks.length, 1.0, 0.5)
+  //     });
+  //     const sphere = new THREE.Mesh(sphereGeometry, sphereMaterial);
+  //     sphere.position.copy(pos);
+  //     sceneRef.current.add(sphere);
+  //     landmarkSpheresRef.current.push(sphere);
+  //   });
+  // }
 
   // Final render
   rendererRef.current.render(sceneRef.current, threeCameraRef.current);
 };
-
 
 
   // JSX 
