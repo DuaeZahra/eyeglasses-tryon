@@ -28,6 +28,25 @@ export default function TryOn() {
   const [faceMeshReady, setFaceMeshReady] = useState(false);
   const [modelsLoaded, setModelsLoaded] = useState(false);
   const [error, setError] = useState(null);
+  const [overlayReady, setOverlayReady] = useState(false);
+
+  const modelConfigs = {
+  '/oculos.obj': {
+    scaleFactor: 1.0, // Base scale multiplier
+    positionOffset: new THREE.Vector3(0, 0, 0), // X, Y, Z offset
+    rotationOffset: new THREE.Euler(0, 0, 0), // Rotation offset in radians
+  },
+  '/glasses.obj': {
+    scaleFactor: 0.5,
+    positionOffset: new THREE.Vector3(0, 0, 0),
+    rotationOffset: new THREE.Euler(0, 0, 0),
+  },
+  '/glasses3.obj': {
+    scaleFactor: 1.0,
+    positionOffset: new THREE.Vector3(0, 0, 0),
+    rotationOffset: new THREE.Euler(0, 0, 0),
+  },
+};
 
   const { selectedImage, setSelectedImage } = useSelectedGlasses();
   const allOptions = [
@@ -325,6 +344,7 @@ export default function TryOn() {
 
     videoRef.current.srcObject = stream;
     videoRef.current.style.visibility = 'hidden'; // Hide video until ready
+    threeCanvasRef.current.style.visibility = 'hidden';
 
     return new Promise((resolve, reject) => {
       videoRef.current.onloadedmetadata = () => {
@@ -605,12 +625,10 @@ export default function TryOn() {
     return;
   }
 
-  // Hide all models first
   Object.values(cachedModels.current).forEach(model => {
     if (model) model.visible = false;
   });
 
-  // Clean up previous landmark spheres
   cleanupLandmarkSpheres();
 
   if (landmarks.length === 0) {
@@ -618,7 +636,13 @@ export default function TryOn() {
     return;
   }
 
-  // Show selected glasses
+  // --- At this point, we know we have landmarks and can place glasses ---
+  if (!overlayReady) {
+    setOverlayReady(true);
+    if (videoRef.current) videoRef.current.style.visibility = 'visible';
+    if (threeCanvasRef.current) threeCanvasRef.current.style.visibility = 'visible';
+  }
+
   glassesModel.visible = true;
 
   // Helper to get converted THREE.Vector3 from landmark index
@@ -666,20 +690,20 @@ glassesModel.setRotationFromMatrix(rotationMatrix);
 
 
   // Optional: Landmark debugging
-  // if (process.env.NODE_ENV === 'development') {
-  //   const sphereGeometry = new THREE.SphereGeometry(0.002, 8, 8);
-  //   const keyLandmarks = [133, 362, 4, 175, 33, 263];
-  //   keyLandmarks.forEach((index, i) => {
-  //     const pos = getLM(index);
-  //     const sphereMaterial = new THREE.MeshBasicMaterial({
-  //       color: new THREE.Color().setHSL(i / keyLandmarks.length, 1.0, 0.5)
-  //     });
-  //     const sphere = new THREE.Mesh(sphereGeometry, sphereMaterial);
-  //     sphere.position.copy(pos);
-  //     sceneRef.current.add(sphere);
-  //     landmarkSpheresRef.current.push(sphere);
-  //   });
-  // }
+  if (process.env.NODE_ENV === 'development') {
+    const sphereGeometry = new THREE.SphereGeometry(0.002, 8, 8);
+    const keyLandmarks = [133, 362, 4, 175, 33, 263];
+    keyLandmarks.forEach((index, i) => {
+      const pos = getLM(index);
+      const sphereMaterial = new THREE.MeshBasicMaterial({
+        color: new THREE.Color().setHSL(i / keyLandmarks.length, 1.0, 0.5)
+      });
+      const sphere = new THREE.Mesh(sphereGeometry, sphereMaterial);
+      sphere.position.copy(pos);
+      sceneRef.current.add(sphere);
+      landmarkSpheresRef.current.push(sphere);
+    });
+  }
 
   // Final render
   rendererRef.current.render(sceneRef.current, threeCameraRef.current);
