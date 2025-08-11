@@ -30,24 +30,25 @@ export default function TryOn() {
   const [error, setError] = useState(null);
   const [overlayReady, setOverlayReady] = useState(false);
   const [landmarksReady, setLandmarksReady] = useState(false);
+  const [faceDetected, setFaceDetected] = useState(false); // New state for face detection
 
   const modelConfigs = {
-  '/oculos.obj': {
-    scaleFactor: 1.0, // Base scale multiplier
-    positionOffset: new THREE.Vector3(0, 0, 0), // X, Y, Z offset
-    rotationOffset: new THREE.Euler(0, 0, 0), // Rotation offset in radians
-  },
-  '/glasses.obj': {
-    scaleFactor: 0.5,
-    positionOffset: new THREE.Vector3(0, 0, 0),
-    rotationOffset: new THREE.Euler(0, 0, 0),
-  },
-  '/glasses3.obj': {
-    scaleFactor: 1.0,
-    positionOffset: new THREE.Vector3(0, 0, 0),
-    rotationOffset: new THREE.Euler(0, 0, 0),
-  },
-};
+    '/oculos.obj': {
+      scaleFactor: 1.0,
+      positionOffset: new THREE.Vector3(0, 0, 0),
+      rotationOffset: new THREE.Euler(0, 0, 0),
+    },
+    '/glasses.obj': {
+      scaleFactor: 0.5,
+      positionOffset: new THREE.Vector3(0, 0, 0),
+      rotationOffset: new THREE.Euler(0, 0, 0),
+    },
+    '/glasses3.obj': {
+      scaleFactor: 1.0,
+      positionOffset: new THREE.Vector3(0, 0, 0),
+      rotationOffset: new THREE.Euler(0, 0, 0),
+    },
+  };
 
   const { selectedImage, setSelectedImage } = useSelectedGlasses();
   const allOptions = [
@@ -72,19 +73,32 @@ export default function TryOn() {
         });
 
         faceMesh.setOptions({
-          maxNumFaces: 2,
-          refineLandmarks: true,
-          minDetectionConfidence: 0.7,
-          minTrackingConfidence: 0.7,
+          maxNumFaces: 1, // Reduced to 1 for performance
+          refineLandmarks: false, // Set to false to reduce processing time (disable iris tracking)
+          minDetectionConfidence: 0.5,
+          minTrackingConfidence: 0.5,
         });
 
         faceMesh.onResults((results) => {
           if (isMounted) {
             faceCache.current = results.multiFaceLandmarks?.map((landmarks) => ({ landmarks })) || [];
+            if (results.multiFaceLandmarks?.length > 0) {
+              setFaceDetected(true);
+            } else {
+              setFaceDetected(false);
+            }
           }
         });
 
         faceMeshRef.current = faceMesh;
+
+        // Preload FaceMesh by sending a dummy image
+        const dummyCanvas = document.createElement('canvas');
+        dummyCanvas.width = 1;
+        dummyCanvas.height = 1;
+        await faceMesh.send({ image: dummyCanvas });
+        console.log('FaceMesh preloaded');
+
         setFaceMeshReady(true);
 
         // === Setup Three.js Scene ===
@@ -328,6 +342,7 @@ export default function TryOn() {
       setError(null);
       setModeLoading(true);
       setOverlayReady(false); // Reset overlay readiness
+      setFaceDetected(false); // Reset face detection
       console.log("Starting webcam...");
 
       if (!faceMeshRef.current) {
@@ -446,6 +461,7 @@ export default function TryOn() {
     }
     faceCache.current = []; // Clear face cache
     setOverlayReady(false); // Reset overlay readiness
+    setFaceDetected(false);
     if (threeCanvasRef.current) {
       threeCanvasRef.current.style.visibility = 'hidden';
     }
@@ -459,6 +475,7 @@ export default function TryOn() {
       setModeLoading(true);
       faceCache.current = []; // Clear face cache
       setOverlayReady(false); // Reset overlay readiness
+      setFaceDetected(false);
 
       if (useWebcam && faceMeshReady && modelsLoaded) {
         console.log("Switching to webcam mode...");
@@ -497,6 +514,7 @@ export default function TryOn() {
     setModeLoading(true);
     setUseWebcam(false);
     setError(null);
+    setFaceDetected(false);
 
     const reader = new FileReader();
     reader.onload = () => {
@@ -584,9 +602,11 @@ export default function TryOn() {
     compositeCanvas.height = height;
     const ctx = compositeCanvas.getContext("2d");
 
-    // Apply horizontal flip
-    ctx.scale(-1, 1); // Mirror horizontally
-    ctx.translate(-width, 0); // Adjust origin to compensate for flip
+    // Apply horizontal flip only for webcam mode
+    if (useWebcam) {
+      ctx.scale(-1, 1); // Mirror horizontally
+      ctx.translate(-width, 0); // Adjust origin to compensate for flip
+    }
 
     // Draw base layer (video or image) from canvasRef
     ctx.drawImage(baseCanvas, 0, 0, width, height);
@@ -601,7 +621,6 @@ export default function TryOn() {
     link.download = "tryon-snapshot.png";
     link.click();
   };
-  
 
   // Main Animation Loop
   useEffect(() => {
@@ -733,22 +752,6 @@ export default function TryOn() {
     right.crossVectors(up, forward).normalize(); // Re-orthogonalize
     const rotationMatrix = new THREE.Matrix4().makeBasis(right, up, forward);
     glassesModel.setRotationFromMatrix(rotationMatrix);
-
-    // // Optional: Landmark debugging
-    // if (process.env.NODE_ENV === 'development') {
-    //   const sphereGeometry = new THREE.SphereGeometry(0.002, 8, 8);
-    //   const keyLandmarks = [133, 362, 4, 175, 33, 263];
-    //   keyLandmarks.forEach((index, i) => {
-    //     const pos = getLM(index);
-    //     const sphereMaterial = new THREE.MeshBasicMaterial({
-    //       color: new THREE.Color().setHSL(i / keyLandmarks.length, 1.0, 0.5),
-    //     });
-    //     const sphere = new THREE.Mesh(sphereGeometry, sphereMaterial);
-    //     sphere.position.copy(pos);
-    //     sceneRef.current.add(sphere);
-    //     landmarkSpheresRef.current.push(sphere);
-    //   });
-    // }
 
     // Final render
     rendererRef.current.render(sceneRef.current, threeCameraRef.current);
@@ -888,6 +891,15 @@ export default function TryOn() {
                    !modelsLoaded ? 'Loading glasses models...' : 
                    'Starting camera...'}
                 </p>
+              </div>
+            </div>
+          )}
+
+          {!modeLoading && overlayReady && !faceDetected && (
+            <div className="absolute inset-0 flex items-center justify-center bg-white/70 z-40">
+              <div className="text-center">
+                <div className="w-10 h-10 border-4 border-blue-500 border-t-transparent rounded-full animate-spin mx-auto mb-4" />
+                <p className="text-gray-700">Detecting the landmarks...</p>
               </div>
             </div>
           )}
