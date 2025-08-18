@@ -30,31 +30,56 @@ export default function TryOn() {
   const [error, setError] = useState(null);
   const [overlayReady, setOverlayReady] = useState(false);
   const [landmarksReady, setLandmarksReady] = useState(false);
-  const [faceDetected, setFaceDetected] = useState(false); // New state for face detection
+  const [faceDetected, setFaceDetected] = useState(false); 
 
-  const modelConfigs = {
-    '/oculos.obj': {
-      scaleFactor: 1.0,
-      positionOffset: new THREE.Vector3(0, 0, 0),
-      rotationOffset: new THREE.Euler(0, 0, 0),
-    },
-    '/glasses.obj': {
-      scaleFactor: 0.5,
-      positionOffset: new THREE.Vector3(0, 0, 0),
-      rotationOffset: new THREE.Euler(0, 0, 0),
-    },
-    '/glasses3.obj': {
-      scaleFactor: 1.0,
-      positionOffset: new THREE.Vector3(0, 0, 0),
-      rotationOffset: new THREE.Euler(0, 0, 0),
-    },
-  };
+  const glassesProperties = {
+  '/glasses1.obj': {
+    scale: 0.8, 
+    positionOffset: { x: 0, y: 0, z: 0 },
+    rotation: { x: 0, y: 0, z: 0 },
+    material: { color: 0x333333, metalness: 0.1, roughness: 0.4 },
+  },
+  '/glasses2.obj': {
+    scale: 9, 
+    positionOffset: { x: 0, y: -0.0125, z: 0 },
+    rotation: { x: 0, y: 0, z: 0 },
+    material: { color: 0x333333, metalness: 0.1, roughness: 0.4 },
+  },
+  '/glasses3.obj': {
+    scale: 1,
+    positionOffset: { x: 0, y:0, z: 0.05 },
+    rotation: { x: 0.5, y: 0, z: 0}, 
+    material: { color: 0x0060000, metalness: 0.2, roughness: 0.3 },
+  },
+  '/glasses4.obj': { 
+    scale: 0.5,
+    positionOffset: { x: 0, y: 0, z: 0 },
+    rotation: { x: 0, y: 0, z: 0 },
+    material: { color: 0x666666, metalness: 0.15, roughness: 0.35 },
+  },
+  '/glasses5.obj': { 
+    scale: 0.25,
+    positionOffset: { x: 0.007, y: 0, z: 0 },
+    rotation: { x: 0, y: 0, z: 0 },
+    material: { color: 0x666666, metalness: 0.15, roughness: 0.35 },
+  },
+  '/glasses6.obj': {
+    scale: 0.3, 
+    positionOffset: { x: 0, y: 0, z: 0 },
+    rotation: { x: 0, y: 0, z: 0 },
+    material: { color: 0x333333, metalness: 0.1, roughness: 0.4 },
+  },
+  
+};
 
   const { selectedImage, setSelectedImage } = useSelectedGlasses();
   const allOptions = [
-    { label: 'Concept', value: '/oculos.obj' },
-    { label: 'Rotem', value: '/glasses.obj' },
-    { label: 'Glasses 3', value: '/glasses2.obj' }
+    { label: 'Concept', value: '/glasses1.obj' },
+    { label: 'Identity', value: '/glasses2.obj' },
+    { label: 'Rotem', value: '/glasses3.obj' },    /// ISSUE
+    { label: 'PrimRose', value: '/glasses4.obj' },
+    { label: 'Terminal', value: '/glasses5.obj' },
+    { label: 'Roaring', value: '/glasses6.obj' }    //ISSUE
   ];
 
   // Initialization: FaceMesh, Scene, Camera, Renderer, Lighting, Models
@@ -73,8 +98,8 @@ export default function TryOn() {
         });
 
         faceMesh.setOptions({
-          maxNumFaces: 1, // Reduced to 1 for performance
-          refineLandmarks: false, // Set to false to reduce processing time (disable iris tracking)
+          maxNumFaces: 1, 
+          refineLandmarks: false, 
           minDetectionConfidence: 0.5,
           minTrackingConfidence: 0.5,
         });
@@ -101,7 +126,7 @@ export default function TryOn() {
 
         setFaceMeshReady(true);
 
-        // === Setup Three.js Scene ===
+        // Setup Three.js Scene 
         const scene = new THREE.Scene();
         sceneRef.current = scene;
 
@@ -119,13 +144,13 @@ export default function TryOn() {
         canvas.width = canvasWidth;
         canvas.height = canvasHeight;
 
-        // === Setup Camera ===
+        // Setup Camera 
         const camera = new THREE.PerspectiveCamera(45, aspect, 0.1, 1000);
         camera.position.set(0, 0, 2);
         camera.lookAt(0, 0, 0);
         threeCameraRef.current = camera;
 
-        // === Setup Renderer ===
+        // Setup Renderer 
         const renderer = new THREE.WebGLRenderer({
           canvas,
           alpha: true,
@@ -140,7 +165,7 @@ export default function TryOn() {
         
         rendererRef.current = renderer;
 
-        // === Lighting ===
+        // Lighting
         scene.add(new THREE.AmbientLight(0xffffff, 0.6));
         
         const directionalLight = new THREE.DirectionalLight(0xffffff, 0.8);
@@ -150,53 +175,69 @@ export default function TryOn() {
         directionalLight.shadow.mapSize.height = 1024;
         scene.add(directionalLight);
 
-        // === Load Glasses Models ===
+        // Load Glasses Models 
         const loader = new OBJLoader();
 
         const loadModel = (path) =>
-          new Promise((resolve, reject) => {
-            loader.load(
-              path,
-              (obj) => {
-                try {
-                  // Center the model
-                  const box = new THREE.Box3().setFromObject(obj);
-                  const center = box.getCenter(new THREE.Vector3());
-                  obj.position.sub(center);
-                  obj.position.y += box.getSize(new THREE.Vector3()).y * 0.5;
-                  obj.visible = false;
+  new Promise((resolve, reject) => {
+    loader.load(
+      path,
+      (obj) => {
+        try {
+          // Center the model
+          const box = new THREE.Box3().setFromObject(obj);
+          const center = box.getCenter(new THREE.Vector3());
+          obj.position.sub(center);
+          obj.position.y += box.getSize(new THREE.Vector3()).y * 0.5;
 
-                  // Apply materials
-                  obj.traverse((child) => {
-                    if (child.isMesh) {
-                      if (!child.material) {
-                        child.material = new THREE.MeshStandardMaterial({
-                          color: 0x333333,
-                          metalness: 0.1,
-                          roughness: 0.4,
-                        });
-                      }
-                      child.castShadow = true;
-                      child.receiveShadow = true;
-                    }
-                  });
+          // Get properties for the model, with defaults if not specified
+          const props = glassesProperties[path] || {
+            scale: 0.01,
+            positionOffset: { x: 0, y: 0, z: 0 },
+            rotation: { x: 0, y: 0, z: 0 },
+            material: { color: 0x333333, metalness: 0.1, roughness: 0.4 },
+          };
 
-                  cachedModels.current[path] = obj;
-                  scene.add(obj);
-                  resolve();
-                } catch (err) {
-                  reject(err);
-                }
-              },
-              (progress) => {
-                console.log(`Loading ${path}: ${(progress.loaded / progress.total * 100)}%`);
-              },
-              (error) => {
-                console.error(`Failed to load model ${path}:`, error);
-                reject(error);
-              }
-            );
+          // Apply scale, position offset, and rotation
+          obj.scale.setScalar(props.scale);
+          obj.position.add(new THREE.Vector3(
+            props.positionOffset.x,
+            props.positionOffset.y,
+            props.positionOffset.z
+          ));
+          obj.rotation.set(props.rotation.x, props.rotation.y, props.rotation.z);
+
+          // Apply materials
+          obj.traverse((child) => {
+            if (child.isMesh) {
+              child.material = new THREE.MeshStandardMaterial({
+                color: props.material.color,
+                metalness: props.material.metalness,
+                roughness: props.material.roughness,
+              });
+              child.castShadow = true;
+              child.receiveShadow = true;
+            }
           });
+
+          obj.visible = false; // Hide by default
+          cachedModels.current[path] = obj;
+          scene.add(obj);
+          resolve();
+        } catch (err) {
+          console.error(`Error processing model ${path}:`, err);
+          reject(err);
+        }
+      },
+      (progress) => {
+        console.log(`Loading ${path}: ${(progress.loaded / progress.total * 100)}%`);
+      },
+      (error) => {
+        console.error(`Failed to load model ${path}:`, error);
+        reject(error);
+      }
+    );
+  });
 
         // Load all models
         try {
@@ -446,26 +487,32 @@ export default function TryOn() {
 
   // Stop webcam
   const stopWebcam = () => {
-    console.log("Stopping webcam...");
-    if (videoRef.current?.srcObject) {
-      videoRef.current.srcObject.getTracks().forEach((track) => track.stop());
-      videoRef.current.srcObject = null;
-    }
-    if (cameraRef.current) {
+  console.log("Stopping webcam...");
+  if (videoRef.current?.srcObject) {
+    videoRef.current.srcObject.getTracks().forEach((track) => {
       try {
-        cameraRef.current.stop();
+        track.stop();
       } catch (e) {
-        console.warn("Error stopping camera:", e);
+        console.warn("Error stopping track:", e);
       }
-      cameraRef.current = null;
+    });
+    videoRef.current.srcObject = null;
+  }
+  if (cameraRef.current) {
+    try {
+      cameraRef.current.stop();
+    } catch (e) {
+      console.warn("Error stopping camera:", e);
     }
-    faceCache.current = []; // Clear face cache
-    setOverlayReady(false); // Reset overlay readiness
-    setFaceDetected(false);
-    if (threeCanvasRef.current) {
-      threeCanvasRef.current.style.visibility = 'hidden';
-    }
-  };
+    cameraRef.current = null;
+  }
+  faceCache.current = [];
+  setOverlayReady(false);
+  setFaceDetected(false);
+  if (threeCanvasRef.current) {
+    threeCanvasRef.current.style.visibility = 'hidden';
+  }
+};
 
   // Handle mode changes
   useEffect(() => {
@@ -683,15 +730,17 @@ export default function TryOn() {
     const modelKey = selectedImage || allOptions[0]?.value;
     const glassesModel = cachedModels.current[modelKey];
     const landmarks = faceCache.current[0]?.landmarks || [];
+    const props = glassesProperties[modelKey] || {
+      scale: 0.01,
+      positionOffset: { x: 0, y: 0, z: 0 },
+      rotation: { x: 0, y: 0, z: 0 },
+      material: { color: 0x333333, metalness: 0.1, roughness: 0.4 },
+    }; //default
 
-    if (!glassesModel || !sceneRef.current || !rendererRef.current || !threeCameraRef.current) {
-      console.warn("Missing required components for rendering:", {
-        glassesModel: !!glassesModel,
-        scene: !!sceneRef.current,
-        renderer: !!rendererRef.current,
-        camera: !!threeCameraRef.current,
-      });
-      return;
+    // Ensure the model is in the scene
+    if (!sceneRef.current.children.includes(glassesModel)) {
+      console.log(`Adding model ${modelKey} to scene`);
+      sceneRef.current.add(glassesModel);
     }
 
     // Hide all models
@@ -701,13 +750,16 @@ export default function TryOn() {
 
     cleanupLandmarkSpheres();
 
-    // Always render the scene, even without landmarks, to maintain visibility
     if (!overlayReady) {
       setOverlayReady(true);
       if (videoRef.current) videoRef.current.style.visibility = 'visible';
-      if (threeCanvasRef.current) threeCanvasRef.current.style.visibility = 'visible';
+      if (threeCanvasRef.current) {
+        threeCanvasRef.current.style.visibility = 'visible';
+        console.log('Three.js canvas visibility set to visible');
+      }
     }
 
+    // If no landmarks, render empty scene
     if (landmarks.length === 0) {
       console.log("No landmarks detected, rendering empty scene");
       rendererRef.current.render(sceneRef.current, threeCameraRef.current);
@@ -716,7 +768,7 @@ export default function TryOn() {
 
     glassesModel.visible = true;
 
-    // Helper to get converted THREE.Vector3 from landmark index
+    // converted THREE.Vector3 from landmark index
     const getLM = (i) => {
       const lm = convertCoords(landmarks[i]);
       return new THREE.Vector3(lm.x, lm.y, lm.z);
@@ -730,30 +782,102 @@ export default function TryOn() {
     const rightOuter = getLM(263); // Right eye outer
     const foreheadCenter = getLM(10); // Forehead center
     const chinTip = getLM(175); // Chin tip
+    const leftEar = getLM(234);
+    const rightEar = getLM(454);
 
-    // Position glasses
+    const leftTempleLength = leftEar.distanceTo(leftOuter);
+    const rightTempleLength = rightEar.distanceTo(rightOuter);
+
+        
+
+    // Position glasses at eye center
     const eyeCenter = new THREE.Vector3()
       .addVectors(leftPos, rightPos)
       .multiplyScalar(0.5)
       .add(new THREE.Vector3(0, (nose.y - (leftPos.y + rightPos.y) / 2) * 0.5, 0));
+    console.log('Eye center position:', eyeCenter);
+
+    console.log(glassesModel);
+    glassesModel.traverse((child) => {
+  console.log("Child:", child.type, "Name:", child.name);
+});
+
+    // glassesModel.traverse((child) => {
+    //   if (child.isMesh) {
+    //     console.log("Mesh name:", child.name, "Vertices:", child.geometry.attributes.position.count);
+    //   }
+    // });
+
 
     glassesModel.position.copy(eyeCenter);
 
-    // Scale based on eye distance
+    // Apply position offset (transformed by rotation)
+    const offset = new THREE.Vector3(props.positionOffset.x, props.positionOffset.y, props.positionOffset.z);
+    offset.applyQuaternion(glassesModel.quaternion);
+    glassesModel.position.add(offset);
+
+    // Scale based on eye distance and per-model scale
     const eyeDist = leftPos.distanceTo(rightPos);
-    const baseEyeDistance = 0.3;
-    const scale = (eyeDist / baseEyeDistance) * 0.8;
-    glassesModel.scale.set(scale, scale, scale);
+    const baseEyeDistance = 0.3 * (canvasRef.current.width / 1280); // Adjust for canvas resolution
+    const dynamicScale = eyeDist / baseEyeDistance;
+    const finalScale = dynamicScale * props.scale;
+    glassesModel.scale.set(finalScale, finalScale, finalScale);
 
     // Rotation using 3D landmark vectors
     const right = new THREE.Vector3().subVectors(rightOuter, leftOuter).normalize();
     const up = new THREE.Vector3().subVectors(foreheadCenter, chinTip).normalize();
     const forward = new THREE.Vector3().crossVectors(right, up).normalize();
-    right.crossVectors(up, forward).normalize(); // Re-orthogonalize
+    right.crossVectors(up, forward).normalize(); 
     const rotationMatrix = new THREE.Matrix4().makeBasis(right, up, forward);
+
+    // Apply dynamic rotation
     glassesModel.setRotationFromMatrix(rotationMatrix);
 
+    // Apply per-model rotation offset
+    const eulerOffset = new THREE.Euler(props.rotation.x, props.rotation.y, props.rotation.z, 'XYZ');
+    const quatOffset = new THREE.Quaternion().setFromEuler(eulerOffset);
+    glassesModel.quaternion.multiply(quatOffset);
+
+    // Ensure material is applied correctly
+    glassesModel.traverse((child) => {
+      if (child.isMesh) {
+        if (!child.material || child.material.color.getHex() !== props.material.color) {
+          console.log(`Updating material for ${modelKey}`);
+          child.material = new THREE.MeshStandardMaterial({
+            color: props.material.color,
+            metalness: props.material.metalness,
+            roughness: props.material.roughness,
+          });
+          child.castShadow = true;
+          child.receiveShadow = true;
+        }
+      }
+    });
+
+    // Debugging landmarks
+    const showLandmarks = false; 
+    if (showLandmarks) {
+      const sphereGeometry = new THREE.SphereGeometry(0.002, 8, 8);
+      const keyLandmarks = [133, 362, 197, 175, 33, 263];
+      keyLandmarks.forEach((index, i) => {
+        const pos = getLM(index);
+        const sphereMaterial = new THREE.MeshBasicMaterial({
+          color: new THREE.Color().setHSL(i / keyLandmarks.length, 1.0, 0.5),
+        });
+        const sphere = new THREE.Mesh(sphereGeometry, sphereMaterial);
+        sphere.position.copy(pos);
+        sceneRef.current.add(sphere);
+        landmarkSpheresRef.current.push(sphere);
+      });
+    }
+
+    // Ensure camera is correctly positioned
+    threeCameraRef.current.position.set(0, 0, 2);
+    threeCameraRef.current.lookAt(0, 0, 0);
+    threeCameraRef.current.updateProjectionMatrix();
+
     // Final render
+    console.log(`Rendering scene with ${modelKey}`);
     rendererRef.current.render(sceneRef.current, threeCameraRef.current);
   };
 
