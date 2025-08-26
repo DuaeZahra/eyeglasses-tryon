@@ -1,19 +1,29 @@
 import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { useSelectedGlasses } from '../context/SelectedGlassesContext';
 
 const heroImages = [
-  { src: '/glasses1.png', name: 'Concept' },
-  { src: '/glasses2.png', name: 'Rotem' },
-  { src: '/glasses3.png', name: 'PrimRose' },
-  { src: '/glasses4.png', name: 'Terminal' },
-  { src: '/glasses5.png', name: 'Identity' },
-  { src: '/glasses6.png', name: 'Roaring' },
+  { src: '/glassess1.png', name: 'Concept' },
+  { src: '/glassess2.png', name: 'Identity' },
+  { src: '/glassess3.PNG', name: 'PrimRose' },
+  { src: '/glassess4.PNG', name: 'Terminal' },
+  { src: '/glassess5.PNG', name: 'Roaring' },
 ];
+
+// Mapping of image paths to OBJ model paths
+const imageToModelMap = {
+  '/glassess1.png': '/glasses1.obj',
+  '/glassess2.png': '/glasses2.obj',
+  '/glassess3.PNG': '/glasses3.obj',
+  '/glassess4.PNG': '/glasses4.obj',
+  '/glassess5.PNG': '/glasses5.obj',
+};
 
 export default function Home() {
   const [currentImage, setCurrentImage] = useState(0);
   const [isHovered, setIsHovered] = useState(false);
   const navigate = useNavigate();
+  const { setSelectedImage } = useSelectedGlasses();
 
   useEffect(() => {
     if (isHovered) return;
@@ -31,10 +41,18 @@ export default function Home() {
     setCurrentImage((prev) => (prev + 1) % heroImages.length);
   };
 
-  const handleClick = () => {
-  navigate('/tryon'); 
-};
-
+  const handleClick = (imageSrc) => {
+    const modelPath = imageToModelMap[imageSrc];
+    if (modelPath) {
+      console.log(`Navigating to TryOn with model: ${modelPath}`);
+      setSelectedImage(modelPath); // Set the OBJ model path in context
+      navigate('/tryon');
+    } else {
+      console.warn(`No model mapping found for image: ${imageSrc}, defaulting to /glasses1.obj`);
+      setSelectedImage('/glasses1.obj'); // Default to Concept
+      navigate('/tryon');
+    }
+  };
 
   return (
     <div className="relative min-h-screen overflow-hidden">
@@ -62,18 +80,17 @@ export default function Home() {
             </p>
             <div className="flex flex-col sm:flex-row gap-4 justify-center lg:justify-start pt-2">
               <button
-              onClick={() => navigate('/products')}
-              className="flex items-center justify-center gap-2 bg-blue-600 text-white px-6 py-3 rounded-lg shadow-md hover:bg-blue-700 transition"
-            >
-              Browse Frames
-            </button>
-            <button
-              onClick={() => navigate('/tryon')}
-              className="flex items-center justify-center gap-2 border border-blue-600 text-blue-600 px-6 py-3 rounded-lg hover:bg-blue-100 transition"
-            >
-              Try Now
-            </button>
-
+                onClick={() => navigate('/products')}
+                className="flex items-center justify-center gap-2 bg-blue-600 text-white px-6 py-3 rounded-lg shadow-md hover:bg-blue-700 transition"
+              >
+                Browse Frames
+              </button>
+              <button
+                onClick={() => navigate('/tryon')}
+                className="flex items-center justify-center gap-2 border border-blue-600 text-blue-600 px-6 py-3 rounded-lg hover:bg-blue-100 transition"
+              >
+                Try Now
+              </button>
             </div>
           </div>
 

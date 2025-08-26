@@ -3,6 +3,14 @@ import products from '../data/products';
 import { useCart } from '../context/CartContext';
 import { useSelectedGlasses } from '../context/SelectedGlassesContext';
 
+const imageToModelMap = {
+  '/glassess1.png': '/glasses1.obj',
+  '/glassess2.png': '/glasses2.obj',
+  '/glassess3.PNG': '/glasses3.obj',
+  '/glassess4.PNG': '/glasses4.obj',
+  '/glassess5.PNG': '/glasses5.obj',
+};
+
 export default function Products() {
   const { gender } = useParams();
   const { addToCart } = useCart();
@@ -11,13 +19,12 @@ export default function Products() {
   const { setSelectedProduct, setSelectedImage } = useSelectedGlasses();
 
   const handleTryOn = (product) => {
-  console.log("Try On clicked for:", product);
-  setSelectedProduct(product);
-  setSelectedImage(product.image);
-  navigate('/tryon');
-};
-
-
+    console.log("Try On clicked for:", product);
+    const modelPath = imageToModelMap[product.image] || '/glasses1.obj';
+    setSelectedProduct(product);
+    setSelectedImage(modelPath);
+    navigate('/tryon');
+  };
 
   const filtered = products.filter((p) => p.gender === gender);
 
