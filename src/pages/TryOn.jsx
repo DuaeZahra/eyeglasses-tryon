@@ -44,7 +44,7 @@ export default function TryOn() {
       rotation: { x: 0, y: 0, z: 0 },
       material: { color: 0x333333, metalness: 0.1, roughness: 0.4 },
     },
-    '/glasses3_new2.obj': {
+    '/glasses3.obj': {
       scale: 0.5,
       positionOffset: { x: 0, y: 0, z: 0 },
       rotation: { x: 0, y: 0, z: 0 },
@@ -68,7 +68,7 @@ export default function TryOn() {
   const allOptions = [
     { label: 'Concept', value: '/glasses1.obj' },
     { label: 'Identity', value: '/glasses2.obj' },
-    { label: 'PrimRose', value: '/glasses3_new2.obj' },
+    { label: 'PrimRose', value: '/glasses3.obj' },
     { label: 'Terminal', value: '/glasses4.obj' },
     { label: 'Roaring', value: '/glasses5.obj' },
   ];
