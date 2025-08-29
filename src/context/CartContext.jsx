@@ -9,12 +9,10 @@ export const CartProvider = ({ children }) => {
     setCartItems((prevItems) => {
       const index = prevItems.findIndex((item) => item.id === product.id)
       if (index !== -1) {
-        // If already exists, increase quantity
         const updatedItems = [...prevItems]
         updatedItems[index].quantity += 1
         return updatedItems
       } else {
-        // Else add with quantity = 1
         return [...prevItems, { ...product, quantity: 1 }]
       }
     })

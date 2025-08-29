@@ -52,7 +52,7 @@ export default function TryOn() {
     },
     '/glasses4.obj': {
       scale: 0.25,
-      positionOffset: { x: 0.007, y: 0.004, z: 0 },
+      positionOffset: { x: 0.005, y: 0, z: 0 },
       rotation: { x: 0, y: 0, z: 0 },
       material: { color: 0x666666, metalness: 0.15, roughness: 0.35 },
     },
@@ -119,7 +119,7 @@ export default function TryOn() {
         const canvas = threeCanvasRef.current;
         const video = videoRef.current;
 
-        // Wait for layout
+        // layout
         await new Promise((resolve) => setTimeout(resolve, 100));
 
         const bounds = video?.getBoundingClientRect() || canvas.getBoundingClientRect();
@@ -169,7 +169,6 @@ export default function TryOn() {
               path,
               (obj) => {
                 try {
-                  // Center the model
                   const box = new THREE.Box3().setFromObject(obj);
                   const center = box.getCenter(new THREE.Vector3());
                   obj.position.sub(center);
@@ -303,10 +302,8 @@ export default function TryOn() {
       landmarkSpheresRef.current = [];
     }
   };
-
   
-  //                           IMPORTANT                      //
-// Resize handler
+  // Resize handler
   useEffect(() => {
     const handleResize = () => {
       const container = threeCanvasRef.current?.parentElement;
@@ -345,112 +342,109 @@ export default function TryOn() {
     return () => resizeObserver.disconnect();
   }, []);
 
-// Start webcam
+  // Start webcam
   const startWebcam = async () => {
-    try {
-      setError(null);
-      setModeLoading(true);
-      setOverlayReady(false);
-      setFaceDetected(false);
-      console.log("Starting webcam...");
+  try {
+    setError(null);
+    setModeLoading(true);
+    setOverlayReady(false);
+    setFaceDetected(false);
 
-      if (!faceMeshRef.current) {
-        throw new Error("FaceMesh not initialized yet.");
-      }
+    if (!faceMeshRef.current) {
+      throw new Error("FaceMesh not initialized yet.");
+    }
 
-      stopWebcam();
+    stopWebcam();
 
-      const stream = await navigator.mediaDevices.getUserMedia({
-        video: {
-          width: { ideal: 1280 },
-          height: { ideal: 720 },
-          facingMode: 'user',
-        },
-      });
+    const stream = await navigator.mediaDevices.getUserMedia({
+      video: {
+        width: { ideal: 1280 },
+        height: { ideal: 720 },
+        facingMode: 'user',
+      },
+    });
 
-      if (!videoRef.current || !threeCanvasRef.current || !canvasRef.current) {
-        throw new Error("Required DOM elements are missing.");
-      }
+    if (!videoRef.current || !threeCanvasRef.current || !canvasRef.current) {
+      throw new Error("Required DOM elements are missing.");
+    }
 
-      videoRef.current.srcObject = stream;
-      videoRef.current.style.visibility = 'hidden';
-      threeCanvasRef.current.style.visibility = 'hidden';
+    videoRef.current.srcObject = stream;
+    videoRef.current.style.visibility = 'hidden';
+    threeCanvasRef.current.style.visibility = 'hidden';
 
-      return new Promise((resolve, reject) => {
-        videoRef.current.onloadedmetadata = () => {
-          videoRef.current
-            .play()
-            .then(() => {
-              const bounds = videoRef.current.getBoundingClientRect();
-              const videoWidth = videoRef.current.videoWidth || bounds.width;
-              const videoHeight = videoRef.current.videoHeight || bounds.height;
+    return new Promise((resolve, reject) => {
+      videoRef.current.onloadedmetadata = () => {
+        videoRef.current
+          .play()
+          .then(() => {
+            const bounds = videoRef.current.getBoundingClientRect();
+            const videoWidth = videoRef.current.videoWidth || bounds.width;
+            const videoHeight = videoRef.current.videoHeight || bounds.height;
 
-              [canvasRef.current, threeCanvasRef.current].forEach((c) => {
-                if (c) {
-                  c.width = videoWidth;
-                  c.height = videoHeight;
-                  c.style.width = '100%';
-                  c.style.height = '100%';
-                  c.style.transform = 'scaleX(-1)';
-                }
+            [canvasRef.current, threeCanvasRef.current].forEach((c) => {
+              if (c) {
+                c.width = videoWidth;
+                c.height = videoHeight;
+                c.style.width = '100%';
+                c.style.height = '100%';
+                c.style.transform = 'scaleX(-1)';
+              }
+            });
+
+            videoRef.current.style.transform = 'scaleX(-1)';
+            videoRef.current.style.visibility = 'visible';
+            threeCanvasRef.current.style.visibility = 'visible';
+
+            if (rendererRef.current && threeCameraRef.current) {
+              rendererRef.current.setSize(videoWidth, videoHeight, false);
+              const aspect = videoWidth / videoHeight;
+              threeCameraRef.current.aspect = aspect;
+              threeCameraRef.current.fov = 45;
+              threeCameraRef.current.position.set(0, 0, 2);
+              threeCameraRef.current.lookAt(0, 0, 0);
+              threeCameraRef.current.updateProjectionMatrix();
+            }
+
+            try {
+              cameraRef.current = new mpCameraUtils.Camera(videoRef.current, {
+                onFrame: async () => {
+                  try {
+                    if (faceMeshRef.current && videoRef.current.readyState >= 2) {
+                      await faceMeshRef.current.send({ image: videoRef.current });
+                    }
+                  } catch {
+                    /* Ignore FaceMesh frame errors */
+                  }
+                },
+                width: videoWidth,
+                height: videoHeight,
               });
 
-              videoRef.current.style.transform = 'scaleX(-1)';
-              videoRef.current.style.visibility = 'visible';
-              threeCanvasRef.current.style.visibility = 'visible';
+              cameraRef.current.start();
+              setOverlayReady(true);
+              resolve();
+            } catch (err) {
+              reject(err);
+            }
+          })
+          .catch(reject);
+      };
 
-              if (rendererRef.current && threeCameraRef.current) {
-                rendererRef.current.setSize(videoWidth, videoHeight, false);
-                const aspect = videoWidth / videoHeight;
-                threeCameraRef.current.aspect = aspect;
-                threeCameraRef.current.fov = 45;
-                threeCameraRef.current.position.set(0, 0, 2);
-                threeCameraRef.current.lookAt(0, 0, 0);
-                threeCameraRef.current.updateProjectionMatrix();
-              }
+      videoRef.current.onerror = () => {
+        reject(new Error("Failed to load video stream."));
+      };
 
-              try {
-                cameraRef.current = new mpCameraUtils.Camera(videoRef.current, {
-                  onFrame: async () => {
-                    try {
-                      if (faceMeshRef.current && videoRef.current.readyState >= 2) {
-                        await faceMeshRef.current.send({ image: videoRef.current });
-                      }
-                    } catch (err) {
-                      console.error("FaceMesh send error:", err);
-                    }
-                  },
-                  width: videoWidth,
-                  height: videoHeight,
-                });
+      setTimeout(() => reject(new Error("Webcam load timeout")), 5000);
+    });
+  } catch (err) {
+    setError('Failed to access webcam. Please check permissions and try again.');
+    throw err;
+  } finally {
+    setModeLoading(false);
+  }
+};
 
-                cameraRef.current.start();
-                setOverlayReady(true);
-                resolve();
-              } catch (err) {
-                console.error("Camera setup failed:", err);
-                reject(err);
-              }
-            })
-            .catch(reject);
-        };
-
-        videoRef.current.onerror = () => {
-          reject(new Error("Failed to load video stream."));
-        };
-
-        setTimeout(() => reject(new Error("Webcam load timeout")), 5000);
-      });
-    } catch (err) {
-      console.error('Failed to start webcam:', err);
-      setError('Failed to access webcam. Please check permissions and try again.');
-      throw err;
-    } finally {
-      setModeLoading(false);
-    }
-  };
-
-// Stop webcam
+  // Stop webcam
   const stopWebcam = () => {
     console.log("Stopping webcam...");
     if (videoRef.current?.srcObject) {
@@ -479,9 +473,6 @@ export default function TryOn() {
     }
   };
   
-  //                           IMPORTANT                      //
-
-
   // Mode Switching 
   useEffect(() => {
     let isMounted = true;
@@ -537,7 +528,6 @@ export default function TryOn() {
     reader.readAsDataURL(file);
   };
 
-  //                                         MOST IMPORTANT
   // Process Uploaded Image
   useEffect(() => {
     if (!useWebcam && imageURL && imageRef.current && threeCanvasRef.current && canvasRef.current && rendererRef.current && threeCameraRef.current) {
@@ -588,9 +578,7 @@ export default function TryOn() {
     }
   }, [imageURL, useWebcam]);
 
-  //                                         MOST IMPORTANT 
-
-// Take snapshot
+  // Take snapshot
   const takeSnapshot = () => {
     const baseCanvas = canvasRef.current;
     const overlayCanvas = threeCanvasRef.current;
@@ -622,7 +610,7 @@ export default function TryOn() {
     link.click();
   };
 
-// Animation Loop
+  // Animation Loop
   useEffect(() => {
     if (!faceMeshReady || modeLoading || !threeCanvasRef.current || !modelsLoaded || !canvasRef.current) return;
 
@@ -659,20 +647,20 @@ export default function TryOn() {
     };
   }, [faceMeshReady, modeLoading, selectedImage, useWebcam, modelsLoaded, imageURL]);
 
-// MediaPipe coordinates to Three.js
-  const convertCoords = (landmark) => {
-    if (!threeCameraRef.current) return new THREE.Vector3();
+  // MediaPipe coordinates to Three.js
+  const convertCoords = (landmark) => { 
+  if (!threeCameraRef.current) return new THREE.Vector3();
 
-    const ndcX = (landmark.x - 0.5) * 2;
-    const ndcY = (0.5 - landmark.y) * 2;
-    const ndcZ = landmark.z * 0.6; 
-    const vec = new THREE.Vector3(ndcX, ndcY, ndcZ);
-    vec.unproject(threeCameraRef.current);
+  const ndcX = (landmark.x - 0.5) * 2;
+  const ndcY = (0.5 - landmark.y) * 2;
+  const ndcZ = landmark.z * 0.6; 
+  const vec = new THREE.Vector3(ndcX, ndcY, ndcZ);
+  vec.unproject(threeCameraRef.current);
 
-    return vec;
-  };
+  return vec;
+};
 
-// Main render loop
+  // Main render loop
   const drawLoop3D = () => {
     const modelKey = selectedImage || '/glasses1.obj';
     const baseModel = cachedModels.current[modelKey];
@@ -713,8 +701,8 @@ export default function TryOn() {
       }
     }
 
-    // drawing glassess on all the faces
-    faceCache.current.forEach((face, index) => {
+    // drawing glasses on all the faces
+    faceCache.current.forEach((face) => {
       const landmarks = face.landmarks;
       if (landmarks.length === 0) return;
 
@@ -723,9 +711,7 @@ export default function TryOn() {
       sceneRef.current.add(glassesModel);
       glassesModel.visible = true;
 
-
       const getLM = (i) => convertCoords(landmarks[i]);
-
 
       const leftPos = getLM(133);
       const rightPos = getLM(362);
@@ -737,46 +723,38 @@ export default function TryOn() {
       const leftEar = getLM(234);
       const rightEar = getLM(454);
 
-      // const templeLength = (leftEar.distanceTo(leftOuter) + rightEar.distanceTo(rightOuter)) / 2;
-
       // Position
       const eyeCenter = new THREE.Vector3()
-        .addVectors(leftPos, rightPos)
-        .multiplyScalar(0.5)
-        .add(new THREE.Vector3(0, (nose.y - (leftPos.y + rightPos.y) / 2) * 0.5, 0));
-      glassesModel.position.copy(eyeCenter);
-      const offset = new THREE.Vector3(
-        props.positionOffset.x,
-        props.positionOffset.y,
-        props.positionOffset.z
-      );
-      offset.applyQuaternion(glassesModel.quaternion);
-      glassesModel.position.add(offset);
+    .addVectors(leftPos, rightPos)
+    .multiplyScalar(0.5);
 
-      //Scaling
+      // Scaling
       const eyeDist = leftPos.distanceTo(rightPos);
       const faceHeight = foreheadCenter.distanceTo(chinTip);
       const combinedScale = (eyeDist + faceHeight) / 2;
       const finalScale = combinedScale * props.scale;
-      glassesModel.scale.set(finalScale, finalScale, finalScale);
 
-      //Rotation
+      // Rotation (basis vectors)
       const right = new THREE.Vector3().subVectors(rightOuter, leftOuter).normalize();
       const up = new THREE.Vector3().subVectors(foreheadCenter, chinTip).normalize();
       const forward = new THREE.Vector3().crossVectors(right, up).normalize();
       right.crossVectors(up, forward).normalize();
       const rotationMatrix = new THREE.Matrix4().makeBasis(right, up, forward);
-      glassesModel.setRotationFromMatrix(rotationMatrix);
       const eulerOffset = new THREE.Euler(props.rotation.x, props.rotation.y, props.rotation.z, 'XYZ');
       const quatOffset = new THREE.Quaternion().setFromEuler(eulerOffset);
+
+      // Apply transform to glasses root
+      glassesModel.position.copy(eyeCenter);
+      glassesModel.scale.set(finalScale, finalScale, finalScale);
+      glassesModel.setRotationFromMatrix(rotationMatrix);
       glassesModel.quaternion.multiply(quatOffset);
 
-      // Scaling Temples
+      // Check if model has separate frame/temple parts
       let hasSeparateParts = false;
       glassesModel.traverse((child) => {
         if (child.isMesh) {
           const name = child.name.toLowerCase();
-          if (name === 'temple' || name === 'frame') {
+          if (name.includes("temple") || name.includes("frame")) {
             hasSeparateParts = true;
           }
         }
@@ -784,86 +762,57 @@ export default function TryOn() {
 
       if (hasSeparateParts) {
 
-      // frame dimension for temple attachment
-      const frameWidth = leftPos.distanceTo(rightPos);
-      
-      //temple attachment points 
-      const leftFrameEdge = new THREE.Vector3().copy(eyeCenter).add(new THREE.Vector3(-frameWidth/2, 0, 0));
-      const rightFrameEdge = new THREE.Vector3().copy(eyeCenter).add(new THREE.Vector3(frameWidth/2, 0, 0));
+        // World positions of edges
+        const leftFrameEdgeWorld = leftPos.clone();
+        const rightFrameEdgeWorld = rightPos.clone();
 
-      //temple directions and lengths from frame edges to ears
-      const leftTempleDir = new THREE.Vector3().subVectors(leftEar, leftFrameEdge).normalize();
-      const rightTempleDir = new THREE.Vector3().subVectors(rightEar, rightFrameEdge).normalize();
-      const leftTempleLength = leftFrameEdge.distanceTo(leftEar);
-      const rightTempleLength = rightFrameEdge.distanceTo(rightEar);
+        // Temple directions and lengths
+        const leftTempleDir = new THREE.Vector3().subVectors(leftEar, leftFrameEdgeWorld).normalize();
+        const rightTempleDir = new THREE.Vector3().subVectors(rightEar, rightFrameEdgeWorld).normalize();
+        const leftTempleLength = leftEar.distanceTo(leftFrameEdgeWorld);
+        const rightTempleLength = rightEar.distanceTo(rightFrameEdgeWorld);
 
-      glassesModel.traverse((child) => {
-        if (!child.isMesh) return;
-        const name = child.name.toLowerCase();
+        glassesModel.traverse((child) => {
+          if (!child.isMesh) return;
+          const name = child.name.toLowerCase();
 
-        if (name.includes("frame")) {
-
-          child.position.copy(eyeCenter);
-          child.position.set(0, 0, 0);
-          child.scale.set(1, 1, 1);
-          child.rotation.set(0, 0, 0);
-          
+          // Common material
           child.material = new THREE.MeshStandardMaterial({
             color: props.material.color,
             metalness: props.material.metalness,
             roughness: props.material.roughness,
           });
-        }
 
-        // Temple positioning 
-        if (name.includes("temple")) {
-          let templeLength, templeDir;
-          
-          if (name.includes("left")) {
-            templeLength = leftTempleLength;
-            templeDir = leftTempleDir;
-            
-            // Position at left frame edge 
-            child.position.set(-frameWidth/2, 0, 0);
-          } else if (name.includes("right")) {
-            templeLength = rightTempleLength;
-            templeDir = rightTempleDir;
-            
-            // Position at right frame edge 
-            child.position.set(frameWidth/2, 0, 0);
+          if (name.includes("temple")) {
+            let templeLength, templeDir, attachWorld;
+
+            if (name.includes("left")) {
+              templeLength = leftTempleLength;
+              templeDir = leftTempleDir;
+              attachWorld = leftFrameEdgeWorld;
+            } else if (name.includes("right")) {
+              templeLength = rightTempleLength;
+              templeDir = rightTempleDir;
+              attachWorld = rightFrameEdgeWorld;
+            }
+
+            // Convert attach point to local space of glassesModel
+            const localAttach = attachWorld.clone().applyMatrix4(glassesModel.matrixWorld.clone().invert());
+            child.position.copy(localAttach);
+
+            // Scale temple
+            const referenceLength = 0.08;
+            const scaleFactor = templeLength 
+            child.scale.set(scaleFactor, 1, 1); 
+
+            // Rotate temple to point toward ear
+            const defaultTempleDir = new THREE.Vector3(0, 0, -1); 
+            const rotationQuat = new THREE.Quaternion().setFromUnitVectors(defaultTempleDir, templeDir);
+            child.setRotationFromQuaternion(rotationQuat);
           }
-
-          // Scale temple to reach ear from frame edge
-          const referenceLength = 0.08;
-          const scaleFactor = templeLength / referenceLength;
-          child.scale.set(scaleFactor, 1, 1);
-
-          // Rotate temple to point toward ear
-          const defaultTempleDir = new THREE.Vector3(0, 0, -1);
-          const rotationQuat = new THREE.Quaternion().setFromUnitVectors(defaultTempleDir, templeDir);
-          child.setRotationFromQuaternion(rotationQuat);
-
-          child.material = new THREE.MeshStandardMaterial({
-            color: props.material.color,
-            metalness: props.material.metalness,
-            roughness: props.material.roughness,
-          });
-        }
-      });
-
-      // Apply any additional offset from properties
-      const offset = new THREE.Vector3(
-        props.positionOffset.x,
-        props.positionOffset.y,
-        props.positionOffset.z
-      );
-      offset.applyQuaternion(glassesModel.quaternion);
-      glassesModel.position.add(offset);
-    }
-
-
-      if (!hasSeparateParts) {
-        console.log("no SeparateParts");
+        });
+      } else {
+        // No separate parts
         glassesModel.traverse((child) => {
           if (child.isMesh) {
             child.material = new THREE.MeshStandardMaterial({
@@ -875,24 +824,17 @@ export default function TryOn() {
         });
       }
 
-      // Landmarks
-      const showLandmarks = false;
-      if (showLandmarks) {
-        const sphereGeometry = new THREE.SphereGeometry(0.002, 8, 8);
-        const keyLandmarks = [133, 362, 197, 175, 33, 263, 234, 454];
-        keyLandmarks.forEach((lmIndex, i) => {
-          const pos = getLM(lmIndex);
-          const sphereMaterial = new THREE.MeshBasicMaterial({
-            color: new THREE.Color().setHSL(i / keyLandmarks.length, 1.0, 0.5),
-          });
-          const sphere = new THREE.Mesh(sphereGeometry, sphereMaterial);
-          sphere.position.copy(pos);
-          sceneRef.current.add(sphere);
-          landmarkSpheresRef.current.push(sphere);
-        });
-      }
+      // Apply offset after all transforms
+      const offset = new THREE.Vector3(
+        props.positionOffset.x,
+        props.positionOffset.y,
+        props.positionOffset.z
+      );
+      offset.applyQuaternion(glassesModel.quaternion);
+      glassesModel.position.add(offset);
     });
 
+    // Mirror if webcam
     if (useWebcam) {
       if (videoRef.current) videoRef.current.style.transform = 'scaleX(-1)';
       if (canvasRef.current) canvasRef.current.style.transform = 'scaleX(-1)';
@@ -903,7 +845,6 @@ export default function TryOn() {
       if (threeCanvasRef.current) threeCanvasRef.current.style.transform = 'scaleX(1)';
     }
 
-    
     rendererRef.current.render(sceneRef.current, threeCameraRef.current);
   };
 

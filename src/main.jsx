@@ -3,7 +3,7 @@ import ReactDOM from 'react-dom/client'
 import App from './App'
 import { BrowserRouter } from 'react-router-dom'
 import './index.css'
-import { SelectedGlassesProvider } from './context/SelectedGlassesContext' // make sure this path is correct
+import { SelectedGlassesProvider } from './context/SelectedGlassesContext' 
 import { CartProvider } from './context/CartContext'
 
 

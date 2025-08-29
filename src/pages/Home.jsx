@@ -10,7 +10,6 @@ const heroImages = [
   { src: '/glassess5.PNG', name: 'Roaring' },
 ];
 
-// Mapping of image paths to OBJ model paths
 const imageToModelMap = {
   '/glassess1.png': '/glasses1.obj',
   '/glassess2.png': '/glasses2.obj',
@@ -45,7 +44,7 @@ export default function Home() {
     const modelPath = imageToModelMap[imageSrc];
     if (modelPath) {
       console.log(`Navigating to TryOn with model: ${modelPath}`);
-      setSelectedImage(modelPath); // Set the OBJ model path in context
+      setSelectedImage(modelPath); 
       navigate('/tryon');
     } else {
       console.warn(`No model mapping found for image: ${imageSrc}, defaulting to /glasses1.obj`);
@@ -63,13 +62,10 @@ export default function Home() {
         className="absolute inset-0 w-full h-full object-cover -z-20"
       />
 
-      {/* Overlay */}
       <div className="absolute inset-0 bg-white/70 backdrop-blur-md -z-10" />
 
-      {/* Centered Content */}
       <div className="relative z-10 flex items-center justify-center min-h-screen px-6">
         <div className="flex flex-col-reverse lg:flex-row items-center justify-center gap-16 w-full max-w-6xl">
-          {/* Text Section */}
           <div className="max-w-xl text-center lg:text-left space-y-6">
             <h1 className="text-5xl font-extrabold text-gray-800 leading-tight">
               Welcome to <span className="text-blue-600">EyeMate</span>

@@ -4,7 +4,7 @@ const SelectedGlassesContext = createContext();
 
 export const SelectedGlassesProvider = ({ children }) => {
   const [selectedProduct, setSelectedProduct] = useState(null);
-  const [selectedImage, setSelectedImage] = useState('/glasses1.obj'); // Set to a valid model path
+  const [selectedImage, setSelectedImage] = useState('/glasses1.obj'); 
 
   return (
     <SelectedGlassesContext.Provider value={{ selectedProduct, setSelectedProduct, selectedImage, setSelectedImage }}>

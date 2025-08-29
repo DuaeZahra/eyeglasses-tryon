@@ -37,7 +37,6 @@ export default function Products() {
         className="absolute inset-0 w-full h-full object-cover -z-20"
       />
 
-      {/* Optional soft overlay */}
       <div className="absolute inset-0 bg-white/60 backdrop-blur-md -z-10" />
 
       {/* Page Content */}
