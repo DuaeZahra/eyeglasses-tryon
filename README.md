@@ -1,6 +1,6 @@
 # 🕶️ AI Eyeglasses Try-On Web App
 
-An AI-powered e-commerce prototype that enables users to virtually try on eyeglasses using real-time face detection. Built with React.js, TailwindCSS, and face-api.js, this app brings a personalized and interactive eyewear shopping experience — right in the browser.
+An AI-powered e-commerce prototype that enables users to virtually try on eyeglasses using real-time face detection. Built with React.js, TailwindCSS, MediaPipe Facemesh model and three.js, this app brings a personalized and interactive eyewear shopping experience — right in the browser.
 
 ---
 
@@ -8,7 +8,7 @@ An AI-powered e-commerce prototype that enables users to virtually try on eyegla
 
 - Home Page: Clean landing page guiding users to explore the store and try-on feature directly or navigate to the try room of specific eyeglasses from the sliding glasses.
 - Product Catalog: Browse and shop the eyeglasses with names, prices, and preview thumbnails.
-- AI Try-On Room: Live webcam support with real-time face detection and glasses overlay using face-api.js.
+- AI Try-On Room: Live webcam support with real-time face detection and glasses overlay using Mediapipe facemesh model and three.js.
 - Upload Support: Users can try on glasses using a photo from their device.
 - Interactive Frame Selection: Switch between multiple eyeglass frames instantly.
 - Shopping Cart: Add/remove glasses and view total price.
@@ -23,9 +23,12 @@ An AI-powered e-commerce prototype that enables users to virtually try on eyegla
 |-------------|------------------------------------|
 | React       | Frontend framework (Vite setup)    |
 | TailwindCSS | Utility-first CSS for UI styling   |
-| face-api.js | Face detection and landmarks       |
+| MediaPipe   |
+     FaceMesh | Face detection and landmarks       |
 | Vite        | Fast dev server & build tool       |
-
+| Vercel      | Deployment                         |
+| Three.js    | 3D rendering                       |
+ 
 ---
 
 
@@ -67,6 +70,10 @@ npm run dev
     </td>
   </tr>
   <tr>
+  <td align="center">
+      <strong>Try-On (Image Upload)</strong><br/>
+      <img src="public/screenshots/tryon.png" width="300"/>
+    </td>
     <td align="center">
       <strong>Try-On (Image Upload)</strong><br/>
       <img src="public/screenshots/tryon2.png" width="300"/>
