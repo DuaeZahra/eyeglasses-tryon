@@ -59,7 +59,7 @@ npm run dev
       <img src="public/screenshots/home.png" width="300"/>
     </td>
     <td align="center">
-      <strong>Product Listing</strong><br/>
+      <strong>Shop by gender</strong><br/>
       <img src="public/screenshots/products.png" width="300"/>
     </td>
     <td align="center">
@@ -69,11 +69,11 @@ npm run dev
   </tr>
   <tr>
   <td align="center">
-      <strong>Try-On (Image Upload)</strong><br/>
+      <strong>Try-On using WebCam)</strong><br/>
       <img src="public/screenshots/tryon.png" width="300"/>
     </td>
     <td align="center">
-      <strong>Try-On (Image Upload)</strong><br/>
+      <strong>Try-On using Image Upload</strong><br/>
       <img src="public/screenshots/tryon2.png" width="300"/>
     </td>
     <td align="center">
