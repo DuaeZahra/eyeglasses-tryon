@@ -1,8 +1,12 @@
 # 🕶️ AI Eyeglasses Try-On Web App
 
-An AI-powered e-commerce prototype that enables users to virtually try on eyeglasses using real-time face detection. Built with React.js, TailwindCSS, MediaPipe Facemesh model and three.js, this app brings a personalized and interactive eyewear shopping experience — right in the browser.
+An interactive AI-powered eyeglasses try-on web app built with React, Three.js, and MediaPipe FaceMesh.
+It lets users preview eyeglasses in real-time using their webcam or uploaded images with accurate face landmark tracking and 3D model overlays.
 
 ---
+
+##  Live Demo
+Explore the web app live at: [EyeMate Try-On](https://eyeglasses-tryon.vercel.app/)
 
 ## ✨ Features
 
@@ -50,6 +54,19 @@ npm install
 ```bash
 npm run dev
 ```
+
+## 🧠 How It Works
+
+1. **Face Detection**  
+   MediaPipe FaceMesh detects **468 facial landmarks** (eyes, nose bridge, temples).
+
+2. **3D Glasses Placement**  
+   The glasses model is **cloned, positioned, scaled, and rotated** based on the detected facial landmark geometry.
+
+3. **Rendering**  
+   Three.js overlays the 3D model on top of the video or uploaded image feed in real-time.
+
+
 ## 📸 Screenshots
 
 <table>
