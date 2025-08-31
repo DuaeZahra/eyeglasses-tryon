@@ -101,10 +101,3 @@ npm run dev
 </table>
 
 
-
-## 🗒️ Notes
-
-- This is a **frontend-only prototype** — there is no backend or database integration.
-- The glasses overlay is approximately aligned for demonstration purposes; it may not be perfectly accurate in all cases.
-- All assets, including eyeglass images and face detection models, are served directly from the `public/` folder.
-
