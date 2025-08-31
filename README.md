@@ -32,6 +32,16 @@ Explore the web app live at: [EyeMate Try-On](https://eyeglasses-tryon.vercel.ap
 | Vite        | Fast dev server & build tool          |
 | Vercel      | Deployment and hosting platform       |
 
+## 🧠 How It Works
+
+1. **Face Detection**  
+   MediaPipe FaceMesh detects **468 facial landmarks** (eyes, nose bridge, temples).
+
+2. **3D Glasses Placement**  
+   The glasses model is **cloned, positioned, scaled, and rotated** based on the detected facial landmark geometry.
+
+3. **Rendering**  
+   Three.js overlays the 3D model on top of the video or uploaded image feed in real-time.
 
 
 ##  Getting Started
@@ -55,16 +65,6 @@ npm install
 npm run dev
 ```
 
-## 🧠 How It Works
-
-1. **Face Detection**  
-   MediaPipe FaceMesh detects **468 facial landmarks** (eyes, nose bridge, temples).
-
-2. **3D Glasses Placement**  
-   The glasses model is **cloned, positioned, scaled, and rotated** based on the detected facial landmark geometry.
-
-3. **Rendering**  
-   Three.js overlays the 3D model on top of the video or uploaded image feed in real-time.
 
 
 ## 📸 Screenshots
