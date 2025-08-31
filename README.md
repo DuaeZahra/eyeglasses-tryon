@@ -86,7 +86,7 @@ npm run dev
   </tr>
   <tr>
   <td align="center">
-      <strong>Try-On using WebCam)</strong><br/>
+      <strong>Try-On using WebCam</strong><br/>
       <img src="public/screenshots/tryon.png" width="300"/>
     </td>
     <td align="center">
