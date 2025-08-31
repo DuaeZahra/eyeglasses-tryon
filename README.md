@@ -19,17 +19,15 @@ An AI-powered e-commerce prototype that enables users to virtually try on eyegla
 
 ## 🔧 Tech Stack
 
-| Tech        | Description                        |
-|-------------|------------------------------------|
-| React       | Frontend framework (Vite setup)    |
-| TailwindCSS | Utility-first CSS for UI styling   |
-| MediaPipe   |
-     FaceMesh | Face detection and landmarks       |
-| Vite        | Fast dev server & build tool       |
-| Vercel      | Deployment                         |
-| Three.js    | 3D rendering                       |
- 
----
+| Tech        | Description                           |
+|-------------|---------------------------------------|
+| React       | Frontend framework (Vite setup)       |
+| TailwindCSS | Utility-first CSS for UI styling      |
+| MediaPipe FaceMesh | Face detection and landmark tracking |
+| Three.js    | 3D rendering for virtual try-on models|
+| Vite        | Fast dev server & build tool          |
+| Vercel      | Deployment and hosting platform       |
+
 
 
 ##  Getting Started
